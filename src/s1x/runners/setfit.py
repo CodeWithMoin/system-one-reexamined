@@ -10,6 +10,7 @@ from __future__ import annotations
 from s1x.runners.fewshot import _device, _full_proba, _single_example_ms
 
 SETFIT_MODEL = "sentence-transformers/paraphrase-mpnet-base-v2"  # SetFit's reference backbone
+LATENCY_N = 50  # single-example timings per (task, k), seed 0 only
 SETFIT_ARGS = dict(batch_size=16, num_epochs=1, num_iterations=20, max_steps=1000)
 
 
@@ -35,6 +36,13 @@ class SetFitRunner:
             return model.model_body.encode(texts, batch_size=64, normalize_embeddings=model.normalize_embeddings,
                                            convert_to_numpy=True, show_progress_bar=False)
 
+        # Latency depends on the backbone and the text, not on which examples it was trained
+        # on, so it is timed once per (task, k) — seed 0, 50 examples — and skipped for the
+        # other seeds. One-at-a-time MPS calls dominated each run's wall time when every
+        # seed timed 200. The cross-method speed comparison is measured separately on one
+        # machine (`s1x latency`), so this is a per-run sanity figure, not the headline.
+        ms = (_single_example_ms(encode, lambda e: clf.predict_proba(e), data.test.texts, n=LATENCY_N)
+              if seed == 0 else [])
         return {"test": _full_proba(clf, encode(data.test.texts), n_classes),
                 "calib": _full_proba(clf, encode(data.calib.texts), n_classes),
-                "ms": _single_example_ms(encode, lambda e: clf.predict_proba(e), data.test.texts)}
+                "ms": ms}

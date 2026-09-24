@@ -23,12 +23,12 @@ def _device() -> str:
     return "mps" if torch.backends.mps.is_available() else "cpu"
 
 
-def _single_example_ms(encode, head, texts: list[str]) -> np.ndarray:
+def _single_example_ms(encode, head, texts: list[str], n: int = LATENCY_N) -> np.ndarray:
     """Per-example wall time for encode + head on one text at a time, after a warm-up."""
     for t in texts[:8]:
         head(encode([t]))
     ms = []
-    for t in texts[:LATENCY_N]:
+    for t in texts[:n]:
         start = time.perf_counter()
         head(encode([t]))
         ms.append((time.perf_counter() - start) * 1000)
