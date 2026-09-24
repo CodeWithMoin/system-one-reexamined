@@ -1,0 +1,52 @@
+{
+ "ag_news": {
+  "n": 1000,
+  "max_len": 512,
+  "prefix_tokens": 23,
+  "state_room": 488,
+  "over_512": 0,
+  "state_truncated": 0,
+  "max_state_tokens": 194,
+  "p99_state_tokens": 119.04999999999995
+ },
+ "emotion": {
+  "n": 1000,
+  "max_len": 512,
+  "prefix_tokens": 25,
+  "state_room": 486,
+  "over_512": 0,
+  "state_truncated": 0,
+  "max_state_tokens": 62,
+  "p99_state_tokens": 52.0
+ },
+ "banking77": {
+  "n": 1000,
+  "max_len": 512,
+  "prefix_tokens": 300,
+  "state_room": 211,
+  "over_512": 0,
+  "state_truncated": 0,
+  "max_state_tokens": 79,
+  "p99_state_tokens": 42.00999999999999
+ },
+ "sst5": {
+  "n": 1000,
+  "max_len": 512,
+  "prefix_tokens": 39,
+  "state_room": 472,
+  "over_512": 0,
+  "state_truncated": 0,
+  "max_state_tokens": 62,
+  "p99_state_tokens": 52.0
+ },
+ "sms_spam": {
+  "n": 1000,
+  "max_len": 512,
+  "prefix_tokens": 31,
+  "state_room": 480,
+  "over_512": 0,
+  "state_truncated": 0,
+  "max_state_tokens": 262,
+  "p99_state_tokens": 73.01999999999998
+ }
+}
