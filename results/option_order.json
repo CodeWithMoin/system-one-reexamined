@@ -1,0 +1,132 @@
+{
+ "n": 200,
+ "note": "flip = argmax label differs from the original option order",
+ "laya/ag_news": {
+  "permutations": [
+   [
+    3,
+    2,
+    1,
+    0
+   ],
+   [
+    1,
+    2,
+    3,
+    0
+   ],
+   [
+    1,
+    2,
+    3,
+    0
+   ]
+  ],
+  "flip_rate": [
+   0.01,
+   0.015,
+   0.015
+  ],
+  "mean_flip_rate": 0.013333333333333334,
+  "any_flip_rate": 0.02
+ },
+ "laya/emotion": {
+  "permutations": [
+   [
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+   ],
+   [
+    1,
+    2,
+    3,
+    4,
+    5,
+    0
+   ],
+   [
+    2,
+    1,
+    3,
+    4,
+    5,
+    0
+   ]
+  ],
+  "flip_rate": [
+   0.055,
+   0.05,
+   0.065
+  ],
+  "mean_flip_rate": 0.05666666666666667,
+  "any_flip_rate": 0.105
+ },
+ "nli/ag_news": {
+  "permutations": [
+   [
+    3,
+    2,
+    1,
+    0
+   ],
+   [
+    1,
+    2,
+    3,
+    0
+   ],
+   [
+    1,
+    2,
+    3,
+    0
+   ]
+  ],
+  "flip_rate": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "mean_flip_rate": 0.0,
+  "any_flip_rate": 0.0
+ },
+ "nli/emotion": {
+  "permutations": [
+   [
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+   ],
+   [
+    1,
+    2,
+    3,
+    4,
+    5,
+    0
+   ],
+   [
+    2,
+    1,
+    3,
+    4,
+    5,
+    0
+   ]
+  ],
+  "flip_rate": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "mean_flip_rate": 0.0,
+  "any_flip_rate": 0.0
+ }
+}

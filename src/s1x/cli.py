@@ -11,16 +11,22 @@ from s1x import cache, metrics
 from s1x.tasks import TASKS, build_splits, load_task
 
 RESULTS = Path(__file__).resolve().parents[2] / "results"
-ZERO_SHOT = ("majority", "laya", "laya-ml", "nli")
+ZERO_SHOT = ("majority", "laya", "laya-ml", "nli", "nli-base", "embed-zs", "embed-zs-base")
 
 
 def _runner(method: str, batch: int = 1):
     if method in ("laya", "laya-ml"):
         from s1x.runners.laya import LayaRunner
         return LayaRunner(method, batch_states=batch)
-    if method == "nli":
-        from s1x.runners.nli import NLIRunner
-        return NLIRunner(batch_examples=batch)
+    if method in ("nli", "nli-base"):
+        from s1x.runners.nli import MODELS, NLIRunner
+        return NLIRunner(batch_examples=batch, model=MODELS[method])
+    if method in ("embed-zs", "embed-zs-base"):
+        from s1x.runners.embed_zs import EmbedZSRunner
+        return EmbedZSRunner(method, batch_examples=batch)
+    if method == "laya-torch":
+        from s1x.runners.laya_torch import LayaTorchRunner
+        return LayaTorchRunner(batch_states=batch)
     raise SystemExit(f"unknown method {method}")
 
 

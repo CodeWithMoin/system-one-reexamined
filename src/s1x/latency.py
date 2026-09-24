@@ -7,6 +7,9 @@ On AG News the per-pair HF pipeline is measured too, as the old reference. Banki
 shows how cost scales with option count: NLI runs one pair per option, Laya reads all options in
 one sequence, embed-lr and SetFit read only the text.
 
+Framework: laya runs on MLX (laya-mlx); laya-torch is upstream Laya on PyTorch MPS, the same
+runtime as nli, nli-base, embed-zs(-base), embed-lr and SetFit.
+
 Few-shot methods are timed on inference only (encode + logistic-regression head). Their models
 are trained here on the k=8, seed=0 draw purely for timing and never written to the cache.
 """
@@ -69,25 +72,30 @@ def run_task(task: str, with_pipeline: bool) -> dict:
     warm = data.calib.texts[:WARMUP]  # warm-up on calib, not on the measured examples
     out: dict = {"task": task, "n": N, "warmup": WARMUP, "options": len(data.labels)}
 
-    from s1x.runners.laya import LayaRunner
-    laya = LayaRunner("laya")
-    out["laya_single"], p_single = _bench(laya, data, texts, warm)
-    laya.batch_states = LAYA_BATCH
-    out["laya_batched"], p_batched = _bench(laya, data, texts, warm)
-    out["laya_batched"] |= {"batch_states": LAYA_BATCH, "max_abs_diff_vs_single": float(np.abs(p_single - p_batched).max()),
-                            "argmax_agree_vs_single": float((p_single.argmax(1) == p_batched.argmax(1)).mean())}
-    del laya
-    gc.collect()
+    def zero_shot(name, make, batch_attr, batch, ref=None):
+        runner = make()
+        out[f"{name}_single"], p1 = _bench(runner, data, texts, warm)
+        setattr(runner, batch_attr, batch)
+        out[f"{name}_batched"], p2 = _bench(runner, data, texts, warm)
+        out[f"{name}_batched"] |= {"batch": batch, "max_abs_diff_vs_single": float(np.abs(p1 - p2).max()),
+                                   "argmax_agree_vs_single": float((p1.argmax(1) == p2.argmax(1)).mean())}
+        if ref is not None:
+            out[f"{name}_single"]["argmax_agree_vs_laya_mlx"] = float((p1.argmax(1) == ref.argmax(1)).mean())
+        del runner
+        gc.collect()
+        return p1
 
-    from s1x.runners.nli import NLIPipelineRunner, NLIRunner
-    nli = NLIRunner()
-    out["nli_single"], q_single = _bench(nli, data, texts, warm)
-    nli.batch_examples = NLI_BATCH
-    out["nli_batched"], q_batched = _bench(nli, data, texts, warm)
-    out["nli_batched"] |= {"batch_examples": NLI_BATCH, "max_pairs_per_pass": nli.max_pairs,
-                           "max_abs_diff_vs_single": float(np.abs(q_single - q_batched).max())}
-    del nli
-    gc.collect()
+    from s1x.runners.embed_zs import EmbedZSRunner
+    from s1x.runners.laya import LayaRunner
+    from s1x.runners.laya_torch import LayaTorchRunner
+    from s1x.runners.nli import MODELS, NLIPipelineRunner, NLIRunner
+
+    p_laya = zero_shot("laya", lambda: LayaRunner("laya"), "batch_states", LAYA_BATCH)
+    zero_shot("laya-torch", LayaTorchRunner, "batch_states", LAYA_BATCH, ref=p_laya)
+    q_single = zero_shot("nli", lambda: NLIRunner(model=MODELS["nli"]), "batch_examples", NLI_BATCH)
+    zero_shot("nli-base", lambda: NLIRunner(model=MODELS["nli-base"]), "batch_examples", NLI_BATCH)
+    zero_shot("embed-zs", lambda: EmbedZSRunner("embed-zs"), "batch_examples", ENCODER_BATCH)
+    zero_shot("embed-zs-base", lambda: EmbedZSRunner("embed-zs-base"), "batch_examples", ENCODER_BATCH)
     if with_pipeline:
         pipe = NLIPipelineRunner()
         out["nli_pipeline_per_pair"], q_pipe = _bench(pipe, data, texts, warm)

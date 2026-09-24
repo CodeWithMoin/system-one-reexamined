@@ -22,6 +22,7 @@ import numpy as np
 from s1x.tasks import Task
 
 MODEL = "MoritzLaurer/deberta-v3-large-zeroshot-v2.0"
+MODELS = {"nli": MODEL, "nli-base": "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"}  # no xsmall v2.0 exists
 
 # One template per task, written once and never tuned on test.
 TEMPLATES = {
@@ -34,7 +35,8 @@ TEMPLATES = {
 
 
 class NLIRunner:
-    def __init__(self, batch_examples: int = 1, max_pairs: int = 96, dtype: str = "auto", device: str | None = None):
+    def __init__(self, batch_examples: int = 1, max_pairs: int = 96, dtype: str = "auto", device: str | None = None,
+                 model: str = MODEL):
         """batch_examples: examples per forward pass (1 = single-example mode, the fair
         latency comparison). max_pairs caps pairs per pass so 77-label tasks fit in memory;
         a pass never holds more than that many pairs."""
@@ -43,11 +45,11 @@ class NLIRunner:
 
         self.torch = torch
         self.device = device or ("mps" if torch.backends.mps.is_available() else "cpu")
-        self.tok = AutoTokenizer.from_pretrained(MODEL)
+        self.tok = AutoTokenizer.from_pretrained(model)
         # dtype="auto" is the load the pipeline does (checkpoint dtype, fp16). In fp16 the padded
         # batch differs from per-pair passes by fp16 kernel noise (up to ~2e-3 in probability);
         # in fp32 the two agree to ~1e-6.
-        self.model = AutoModelForSequenceClassification.from_pretrained(MODEL, dtype=dtype).to(self.device).eval()
+        self.model = AutoModelForSequenceClassification.from_pretrained(model, dtype=dtype).to(self.device).eval()
         self.entail = next(i for label, i in self.model.config.label2id.items() if label.lower().startswith("entail"))
         self.batch_examples = batch_examples
         self.max_pairs = max_pairs

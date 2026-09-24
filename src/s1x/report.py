@@ -15,7 +15,7 @@ from s1x import cache, metrics
 from s1x.tasks import TASKS
 
 RESULTS = Path(__file__).resolve().parents[2] / "results"
-ZERO_SHOT = ("majority", "laya", "laya-ml", "nli")
+ZERO_SHOT = ("majority", "laya", "laya-ml", "nli", "nli-base", "embed-zs", "embed-zs-base")
 FEW_SHOT = ("embed-lr", "setfit", "ft-ce")
 PARITY_METHODS = ("setfit", "embed-lr")
 METRICS = ("accuracy", "macro_f1", "ece", "ece_ts", "brier", "sel_acc@50", "sel_acc@80", "sel_acc@95",
@@ -169,29 +169,57 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
 
     lat = RESULTS / "latency.json"
     bench = json.loads(lat.read_text()).get("benchmark_v2", {}) if lat.exists() else {}
-    names = [("laya_single", "Laya, 1 example/pass"), ("nli_single", "NLI, 1 example/pass (all hypotheses in one batch)"),
-             ("nli_pipeline_per_pair", "NLI, HF pipeline (1 pass per hypothesis)"),
-             ("embed-lr_single", "embed-lr, 1 example (encode + head)"), ("setfit_single", "SetFit, 1 example (encode + head)"),
-             ("laya_batched", "Laya, batched"), ("nli_batched", "NLI, batched"),
-             ("embed-lr_batched", "embed-lr, batched"), ("setfit_batched", "SetFit, batched")]
+    torch_methods = [("laya-torch", "Laya (upstream PyTorch)"), ("nli", "NLI DeBERTa-v3-large"),
+                     ("nli-base", "NLI DeBERTa-v3-base"), ("embed-zs", "embed-zs (bge-small)"),
+                     ("embed-zs-base", "embed-zs-base (bge-base)"), ("embed-lr", "embed-lr (bge-small + LR)"),
+                     ("setfit", "SetFit (mpnet-base + LR)")]
     for task in ("ag_news", "banking77"):
         b_ = bench.get(task)
         if not b_:
             continue
         out += [f"## Latency on {task} ({b_['options']} options; same {b_['n']} test examples, after warm-up, M1 16 GB)", "",
-                "| Setup | p50 ms/example | p95 ms/example | examples/s |", "|---|---|---|---|"]
-        for key, label in names:
-            if key in b_:
-                s_ = b_[key]
-                extra = f" ({s_.get('batch_states') or s_.get('batch_examples') or s_.get('batch')} per pass)" if key.endswith("batched") else ""
-                out.append(f"| {label}{extra} | {s_['p50_ms']:.1f} | {s_['p95_ms']:.1f} | {s_['examples_per_s']:.1f} |")
-        out += ["", "Batched rows: per-example time = pass wall time / batch size. Few-shot rows time inference only.", ""]
+                "Primary comparison: everything on the same runtime (PyTorch, MPS). Single = one input per forward "
+                "pass (NLI: all its hypotheses in that one pass); batched = several inputs per pass, per-example "
+                "time = pass wall time / batch size. Few-shot rows time inference only.", "",
+                "| Method | single p50 ms | single p95 ms | batched ms/example | batched examples/s | batch |",
+                "|---|---|---|---|---|---|"]
+
+        def row(label, key):
+            s1, s2 = b_.get(f"{key}_single"), b_.get(f"{key}_batched")
+            if not s1:
+                return None
+            bb = (s2 or {}).get("batch") or (s2 or {}).get("batch_states") or (s2 or {}).get("batch_examples") or "–"
+            return (f"| {label} | {s1['p50_ms']:.1f} | {s1['p95_ms']:.1f} | "
+                    f"{(s2['wall_s'] * 1000 / s2['n']) if s2 else float('nan'):.1f} | "
+                    f"{s2['examples_per_s'] if s2 else float('nan'):.1f} | {bb} |")
+
+        for key, label in torch_methods:
+            r_ = row(label, key)
+            if r_:
+                out.append(r_)
+        out += ["", "Other runtimes (not part of the same-framework comparison):", "",
+                "| Method | single p50 ms | single p95 ms | batched ms/example | batched examples/s | batch |",
+                "|---|---|---|---|---|---|"]
+        for key, label in [("laya", "Laya on MLX (laya-mlx, optimised runtime)")]:
+            r_ = row(label, key)
+            if r_:
+                out.append(r_)
+        if "nli_pipeline_per_pair" in b_:
+            s1 = b_["nli_pipeline_per_pair"]
+            out.append(f"| NLI large via HF pipeline (1 pass per hypothesis, old runner) | {s1['p50_ms']:.1f} | "
+                       f"{s1['p95_ms']:.1f} | – | {s1['examples_per_s']:.1f} | – |")
+        agree = b_.get("laya-torch_single", {}).get("argmax_agree_vs_laya_mlx")
+        if agree is not None:
+            out += ["", f"laya-torch vs laya-mlx argmax agreement on these {b_['n']} examples: {agree:.3f}."]
+        out.append("")
 
     out += ["## Accuracy vs latency", "",
             "Per task: test accuracy (few-shot: mean over seeds) against single-example p50 latency on the M1. Latency "
             "comes from the benchmark above where it covers the task, otherwise from the run's own per-example timings "
             "(NLI on ag_news/emotion then being the old per-pair pipeline, so those points use the benchmark). "
-            "★ = Pareto-optimal (no other point is both at least as accurate and at least as fast, and strictly better in one).", ""]
+            "★ = Pareto-optimal (no other point is both at least as accurate and at least as fast, and strictly better in one). "
+            "Laya appears twice where both runtimes were timed: MLX (its optimised runtime) and PyTorch MPS (same "
+            "runtime as every other method). Few-shot latency: encode + head.", ""]
     for task in task_names:
         pts = []
         for r in rows:
@@ -205,6 +233,11 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
             else:
                 continue
             name = r["method"] + (f" k={r['k']}" if r["k"] else "")
+            if r["method"] == "laya":
+                name = "laya (MLX)"
+                torch_ = bench.get(task, {}).get("laya-torch_single")
+                if torch_:
+                    pts.append(("laya (PyTorch MPS)", r["accuracy"]["mean"], torch_["p50_ms"], "benchmark"))
             pts.append((name, r["accuracy"]["mean"], ms, src))
         if not pts:
             continue
