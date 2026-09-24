@@ -44,3 +44,24 @@ def test_brier_and_ordinal():
     y = np.array([0, 1, 2, 3, 4])
     assert metrics.brier(p, y) == 0.0
     assert metrics.ordinal(p, y) == {"mae": 0.0, "qwk": 1.0}
+
+
+def test_paired_bootstrap():
+    rng = np.random.default_rng(1)
+    base = rng.random(1000) < 0.7
+    same = metrics.paired_bootstrap(base, base)
+    assert same["diff"] == 0.0 and same["lo"] == 0.0 and same["hi"] == 0.0 and not same["excludes_zero"]
+    better = base | (rng.random(1000) < 0.3)  # strictly more correct
+    r = metrics.paired_bootstrap(better, base)
+    assert r["diff"] > 0 and r["lo"] > 0 and r["excludes_zero"]
+    assert r["lo"] <= r["diff"] <= r["hi"]
+    assert metrics.paired_bootstrap(better, base) == r  # fixed seed -> reproducible
+    noise = metrics.paired_bootstrap(rng.random(1000) < 0.5, rng.random(1000) < 0.5)
+    assert noise["lo"] < noise["diff"] < noise["hi"]
+
+
+def test_setfit_trains_one_epoch_capped():
+    from s1x.runners.setfit import STEP_CAP, epoch_steps
+    assert epoch_steps(48) == 120            # emotion k=8: 1,920 pairs / 16, as logged on the M4
+    assert epoch_steps(32) == 80             # ag_news k=8
+    assert min(epoch_steps(77 * 64), STEP_CAP) == STEP_CAP  # banking77 k=64 hits the cap
