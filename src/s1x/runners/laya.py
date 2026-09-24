@@ -59,6 +59,14 @@ class LayaRunner:
         return np.array(probs), np.array(conf), np.array(ms)
 
     def _predict_batched(self, task: Task, labels: tuple[str, ...], texts: list[str]):
+        """Inputs are grouped by length (less padding per pass), results returned in input order."""
+        order = np.argsort([len(t) for t in texts], kind="stable")
+        p, c, ms = self._predict_batched_ordered(task, labels, [texts[i] for i in order])
+        inv = np.empty_like(order)
+        inv[order] = np.arange(len(order))
+        return p[inv], c[inv], ms[inv]
+
+    def _predict_batched_ordered(self, task: Task, labels: tuple[str, ...], texts: list[str]):
         from laya_mlx.agent import collate_items
         from laya_mlx.common import confidence_from_probs, temp_bucket
 

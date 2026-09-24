@@ -105,3 +105,19 @@ def summary(p: np.ndarray, y: np.ndarray, *, p_calib: np.ndarray | None = None, 
     if ordinal_task:
         out |= ordinal(p, y)
     return out
+
+
+def paired_bootstrap(a: np.ndarray, b: np.ndarray, n_resamples: int = 10_000, seed: int = 20260924) -> dict:
+    """Paired bootstrap of mean(a) - mean(b) over test examples.
+
+    a, b: per-example scores on the same examples (1/0 correctness, or the share of seeds
+    correct for a k-shot method). Resamples examples with replacement; returns the observed
+    difference and a percentile 95% CI.
+    """
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    d = a - b
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(d), size=(n_resamples, len(d)))
+    boots = d[idx].mean(1)
+    lo, hi = np.percentile(boots, [2.5, 97.5])
+    return {"diff": float(d.mean()), "lo": float(lo), "hi": float(hi), "excludes_zero": bool(lo > 0 or hi < 0)}

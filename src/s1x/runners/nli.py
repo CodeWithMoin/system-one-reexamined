@@ -73,9 +73,11 @@ class NLIRunner:
         template = TEMPLATES[task.name]
         hyps = [template.format(label) for label in labels]
         per_pass = max(1, self.batch_examples)
+        # Several inputs per pass: group by length (less padding), return in input order.
+        order = np.argsort([len(t) for t in texts], kind="stable") if per_pass > 1 else np.arange(len(texts))
         probs, ms = [], []
         for s in range(0, len(texts), per_pass):
-            chunk = texts[s:s + per_pass]
+            chunk = [texts[i] for i in order[s:s + per_pass]]
             start = time.perf_counter()
             z = self._score(chunk, hyps)
             elapsed = (time.perf_counter() - start) * 1000
@@ -83,7 +85,9 @@ class NLIRunner:
             p = np.exp(z) / np.exp(z).sum(1, keepdims=True)
             probs.extend(p)
             ms.extend([elapsed / len(chunk)] * len(chunk))
-        return np.array(probs), np.full(len(texts), np.nan), np.array(ms)
+        inv = np.empty_like(order)
+        inv[order] = np.arange(len(order))
+        return np.array(probs)[inv], np.full(len(texts), np.nan), np.array(ms)[inv]
 
 
 class NLIPipelineRunner:

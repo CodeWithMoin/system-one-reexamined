@@ -41,7 +41,8 @@ def _one(task: str, method: str, shot: str | None) -> dict:
     pc, yc, _ = d.get("calib", (None, None, None))
     s = metrics.summary(p, y, p_calib=pc, y_calib=yc, ordinal_task=TASKS[task].kind == "score")
     ok = ms[~np.isnan(ms)]
-    s |= {"p50_ms": float(np.median(ok)) if len(ok) else None, "p95_ms": float(np.percentile(ok, 95)) if len(ok) else None}
+    s |= {"p50_ms": float(np.median(ok)) if len(ok) else None, "p95_ms": float(np.percentile(ok, 95)) if len(ok) else None,
+          "_correct": (p.argmax(1) == y).astype(float)}
     return s
 
 
@@ -63,18 +64,27 @@ def build(task_names: list[str]) -> list[dict]:
         for method in ZERO_SHOT:
             if cache.exists(task, method):
                 s = _one(task, method, None)
-                rows.append({"task": task, "method": method, "k": 0, "seeds": 1, "n": s["n"],
+                rows.append({"task": task, "method": method, "k": 0, "seeds": 1, "n": s["n"], "_correct": s["_correct"],
                              **{m: {"mean": s[m], "std": 0.0} for m in METRICS if s.get(m) is not None}})
         runs = _few_shot_runs(task)
         for (method, k), shots in sorted(runs.items(), key=lambda kv: (FEW_SHOT.index(kv[0][0]), kv[0][1])):
             per_seed = {seed: _one(task, method, shot) for seed, shot in sorted(shots.items())}
             row = {"task": task, "method": method, "k": k, "seeds": len(per_seed), "seed_ids": sorted(per_seed),
-                   "n": next(iter(per_seed.values()))["n"]}
+                   "n": next(iter(per_seed.values()))["n"],
+                   # per example: share of seeds that got it right (the bootstrap resamples examples)
+                   "_correct": np.mean([s["_correct"] for s in per_seed.values()], axis=0)}
             for m in METRICS:
                 vals = [s[m] for s in per_seed.values() if s.get(m) is not None]
                 if vals:
                     row[m] = {"mean": float(np.mean(vals)), "std": float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0}
             rows.append(row)
+    for task in task_names:
+        laya = next((r for r in rows if r["task"] == task and r["method"] == "laya"), None)
+        if laya is None:
+            continue
+        for r in rows:
+            if r["task"] == task and r is not laya:
+                r["vs_laya"] = metrics.paired_bootstrap(r["_correct"], laya["_correct"])
     return rows
 
 
@@ -99,6 +109,12 @@ def _fmt(cell: dict | None, digits: int = 3) -> str:
     return f"{cell['mean']:.{digits}f}"
 
 
+def _delta(b: dict | None) -> str:
+    if b is None:
+        return "–"
+    return f"{b['diff']:+.3f} [{b['lo']:+.3f}, {b['hi']:+.3f}]{' *' if b['excludes_zero'] else ''}"
+
+
 def _ms(cell: dict | None) -> str:
     return "–" if cell is None else f"{cell['mean']:.1f}"
 
@@ -110,18 +126,22 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
            "draws committed in `data/splits/`). ECE uses 15 equal-width bins; \"ECE (TS)\" is after one "
            "temperature fit on the 500-example calib split. Sel@80 = accuracy on the 80% most-confident "
            "test examples. p50 latency is per example in single-example mode on an M1 (16 GB), model load "
-           "excluded (few-shot: encode + head).", ""]
+           "excluded (few-shot: encode + head). Δ acc vs Laya: paired bootstrap over the 1,000 test examples "
+           "(10,000 resamples, fixed seed), percentile 95% CI; * = CI excludes 0. For k-shot rows each example's "
+           "score is the share of the seeds that got it right (mean over seeds per example), so the CI covers "
+           "test-set sampling, not seed-to-seed variation (that is the ± std).", ""]
     for task in task_names:
         trs = [r for r in rows if r["task"] == task]
         if not trs:
             continue
         ordinal = TASKS[task].kind == "score"
-        head = ["Method", "k", "seeds", "Accuracy", "Macro-F1", "ECE", "ECE (TS)", "Sel@80", "p50 ms"]
+        head = ["Method", "k", "seeds", "Accuracy", "Δ acc vs Laya [95% CI]", "Macro-F1", "ECE", "ECE (TS)", "Sel@80", "p50 ms"]
         if ordinal:
             head += ["MAE", "QWK"]
         out += [f"## {task}", "", "| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
         for r in trs:
-            cells = [r["method"], str(r["k"]), str(r["seeds"]), _fmt(r.get("accuracy")), _fmt(r.get("macro_f1")),
+            cells = [r["method"], str(r["k"]), str(r["seeds"]), _fmt(r.get("accuracy")), _delta(r.get("vs_laya")),
+                     _fmt(r.get("macro_f1")),
                      _fmt(r.get("ece")), _fmt(r.get("ece_ts")), _fmt(r.get("sel_acc@80")), _ms(r.get("p50_ms"))]
             if ordinal:
                 cells += [_fmt(r.get("mae")), _fmt(r.get("qwk"))]
@@ -148,20 +168,51 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
         out.append("")
 
     lat = RESULTS / "latency.json"
-    if lat.exists():
-        b = json.loads(lat.read_text()).get("benchmark")
-        if b:
-            out += ["## Latency (same 200 AG News test examples, after warm-up)", "",
-                    "| Setup | p50 ms/example | p95 ms/example | examples/s |", "|---|---|---|---|"]
-            names = {"laya_single": "Laya, one example per pass", "nli_single": "NLI, one example per pass (all 4 hypotheses batched)",
-                     "nli_pipeline_per_pair": "NLI, HF pipeline (one pass per hypothesis)",
-                     "laya_batched": f"Laya, {b.get('laya_batched', {}).get('batch_states')} examples per pass",
-                     "nli_batched": f"NLI, {b.get('nli_batched', {}).get('batch_examples')} examples per pass"}
-            for key, label in names.items():
-                if key in b:
-                    s = b[key]
-                    out.append(f"| {label} | {s['p50_ms']:.1f} | {s['p95_ms']:.1f} | {s['examples_per_s']:.1f} |")
-            out += ["", "In batched mode, per-example latency is the pass wall time divided by the batch size.", ""]
+    bench = json.loads(lat.read_text()).get("benchmark_v2", {}) if lat.exists() else {}
+    names = [("laya_single", "Laya, 1 example/pass"), ("nli_single", "NLI, 1 example/pass (all hypotheses in one batch)"),
+             ("nli_pipeline_per_pair", "NLI, HF pipeline (1 pass per hypothesis)"),
+             ("embed-lr_single", "embed-lr, 1 example (encode + head)"), ("setfit_single", "SetFit, 1 example (encode + head)"),
+             ("laya_batched", "Laya, batched"), ("nli_batched", "NLI, batched"),
+             ("embed-lr_batched", "embed-lr, batched"), ("setfit_batched", "SetFit, batched")]
+    for task in ("ag_news", "banking77"):
+        b_ = bench.get(task)
+        if not b_:
+            continue
+        out += [f"## Latency on {task} ({b_['options']} options; same {b_['n']} test examples, after warm-up, M1 16 GB)", "",
+                "| Setup | p50 ms/example | p95 ms/example | examples/s |", "|---|---|---|---|"]
+        for key, label in names:
+            if key in b_:
+                s_ = b_[key]
+                extra = f" ({s_.get('batch_states') or s_.get('batch_examples') or s_.get('batch')} per pass)" if key.endswith("batched") else ""
+                out.append(f"| {label}{extra} | {s_['p50_ms']:.1f} | {s_['p95_ms']:.1f} | {s_['examples_per_s']:.1f} |")
+        out += ["", "Batched rows: per-example time = pass wall time / batch size. Few-shot rows time inference only.", ""]
+
+    out += ["## Accuracy vs latency", "",
+            "Per task: test accuracy (few-shot: mean over seeds) against single-example p50 latency on the M1. Latency "
+            "comes from the benchmark above where it covers the task, otherwise from the run's own per-example timings "
+            "(NLI on ag_news/emotion then being the old per-pair pipeline, so those points use the benchmark). "
+            "★ = Pareto-optimal (no other point is both at least as accurate and at least as fast, and strictly better in one).", ""]
+    for task in task_names:
+        pts = []
+        for r in rows:
+            if r["task"] != task or r["method"] == "majority" or "accuracy" not in r:
+                continue
+            key = f"{r['method']}_single"
+            if task in bench and key in bench[task]:
+                ms, src = bench[task][key]["p50_ms"], "benchmark"
+            elif r.get("p50_ms"):
+                ms, src = r["p50_ms"]["mean"], "run"
+            else:
+                continue
+            name = r["method"] + (f" k={r['k']}" if r["k"] else "")
+            pts.append((name, r["accuracy"]["mean"], ms, src))
+        if not pts:
+            continue
+        out += [f"**{task}**", "", "| Method | Accuracy | p50 ms | latency source | Pareto |", "|---|---|---|---|---|"]
+        for name, acc, ms, src in sorted(pts, key=lambda x: x[2]):
+            dominated = any((a2 >= acc and m2 <= ms) and (a2 > acc or m2 < ms) for n2, a2, m2, _ in pts if n2 != name)
+            out.append(f"| {name} | {acc:.3f} | {ms:.1f} | {src} | {'' if dominated else '★'} |")
+        out.append("")
 
     ov = RESULTS / "laya_overflow.json"
     if ov.exists():
@@ -201,6 +252,7 @@ def write(task_names: list[str]) -> list[dict]:
     rows = build(task_names)
     pars = {t: parity(rows, t) for t in task_names}
     RESULTS.mkdir(exist_ok=True)
-    (RESULTS / "main_table.json").write_text(json.dumps({"rows": rows, "labels_to_parity": pars}, indent=1))
+    clean = [{k: v for k, v in r.items() if not k.startswith("_")} for r in rows]
+    (RESULTS / "main_table.json").write_text(json.dumps({"rows": clean, "labels_to_parity": pars}, indent=1))
     (RESULTS / "RESULTS.md").write_text(markdown(rows, task_names))
     return rows
