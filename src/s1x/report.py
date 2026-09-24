@@ -20,6 +20,18 @@ FEW_SHOT = ("embed-lr", "setfit", "ft-ce")
 PARITY_METHODS = ("setfit", "embed-lr")
 METRICS = ("accuracy", "macro_f1", "ece", "ece_ts", "brier", "sel_acc@50", "sel_acc@80", "sel_acc@95",
            "p50_ms", "p95_ms", "mae", "qwk", "temperature")
+TASK_NOTES = {
+    "banking77": "Laya note: a choice question's options share `head_max_len` = 192 tokens, so with 77 labels "
+                 "each option is cut to [MASK] + 3 tokens (30 of 77 label names are trimmed; 7 labels collapse "
+                 "into 3 identical trimmed forms, e.g. \"top up by …\"), and the instruction is cut to "
+                 "\"What is the customer asking\". laya-mlx rejected no options (77 markers kept). The vendor calls "
+                 "0.425 an architectural ceiling. laya-mlx also clamps the shipped `choice:11+` temperature "
+                 "(0.1006, a 10x sharpening) to 0.5. Data: mteb/banking77 (parquet copy of PolyAI/banking77).",
+    "sms_spam": "Caveat: Laya's BENCHMARKS.md says email spam and phishing were in its training mix, so this is "
+                "possibly in Laya's training distribution — not a clean zero-shot test. Laya answers a `noul` "
+                "question and returns P(true) for \"Is this text message spam?\".",
+    "sst5": "SST-5 is Laya's `score` type (ordinal, 5 levels); MAE and QWK are on the argmax level.",
+}
 SHOT_RE = re.compile(r"^(?P<method>.+)__k=(?P<k>\d+),seed=(?P<seed>\d+)\.jsonl$")
 
 
@@ -114,6 +126,8 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
             if ordinal:
                 cells += [_fmt(r.get("mae")), _fmt(r.get("qwk"))]
             out.append("| " + " | ".join(cells) + " |")
+        if task in TASK_NOTES:
+            out += ["", TASK_NOTES[task]]
         par = parity(rows, task)
         if par["laya_accuracy"] is not None:
             bits = []
@@ -160,6 +174,26 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
                 s = o[task]
                 out.append(f"| {task} | {s['over_512']} | {s['state_truncated']} | {s['state_room']} | {s['max_state_tokens']} |")
         out.append("")
+    oo = RESULTS / "option_order.json"
+    if oo.exists():
+        o = json.loads(oo.read_text())
+        out += ["## Option-order robustness (first 200 test examples, 3 fixed permutations)", "",
+                "Flip rate = share of examples whose predicted label changes versus the original option order.", "",
+                "| Method / task | flip rate per permutation | mean | any of the 3 |", "|---|---|---|---|"]
+        for key, s_ in o.items():
+            if isinstance(s_, dict):
+                out.append(f"| {key} | {', '.join(f'{v:.3f}' for v in s_['flip_rate'])} | {s_['mean_flip_rate']:.3f} | {s_['any_flip_rate']:.3f} |")
+        out.append("")
+
+    td = RESULTS / "typed_decisions.json"
+    if td.exists():
+        out += ["## On Laya's own benchmark", "", json.loads(td.read_text()).get("markdown", ""), ""]
+
+    out += ["## Notes", "",
+            "- Laya's `confidence` field is 1 − normalised entropy, not a probability of being right; every "
+            "calibration number here uses Laya's per-option probabilities instead.",
+            "- Related work: nibzard/decision-model-benchmark compares Jev with 8 LLMs and trivial baselines "
+            "(no trained classifiers); this repo adds the classifiers we already had.", ""]
     return "\n".join(out)
 
 

@@ -130,6 +130,7 @@ def main() -> None:
     rp = sub.add_parser("run"); rp.add_argument("method"); rp.add_argument("task"); rp.add_argument("--limit", type=int)
     rp.add_argument("--batch", type=int, default=1, help="examples per forward pass (latency then = pass time / batch)")
     sub.add_parser("latency")
+    sub.add_parser("order")
     fp = sub.add_parser("fewshot"); fp.add_argument("method"); fp.add_argument("tasks", nargs="+")
     fp.add_argument("--k", type=int, nargs="+", default=[8, 16, 64]); fp.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2, 3, 4])
     fp.add_argument("--force", action="store_true")
@@ -151,6 +152,9 @@ def main() -> None:
         print(f"wrote {latency.write(result)}")
     elif a.cmd == "fewshot":
         fewshot(a.method, a.tasks, a.k, a.seeds, a.force, a.max_steps, a.no_cache)
+    elif a.cmd == "order":
+        from s1x import robustness
+        robustness.run()
     elif a.cmd == "overflow":
         overflow(a.tasks)
     else:
