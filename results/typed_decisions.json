@@ -1,0 +1,21 @@
+{
+ "status": "stopped: majority baseline not reproduced",
+ "random_ours": 0.3175,
+ "majority_published": 0.461,
+ "majority_candidates": {
+  "per_workflow_question_train": 0.4835,
+  "per_workflow_question_train_probsum": 0.4785,
+  "vs_argmax_majority": [
+   0.483,
+   0.4855
+  ],
+  "per_question_id": 0.4115,
+  "per_question_id_probsum": 0.427,
+  "per_type": 0.3105,
+  "per_type_and_k": 0.3455,
+  "global_index": 0.2925,
+  "per_type_index": 0.394,
+  "per_workflow_question_fit_on_test": 0.5225
+ },
+ "markdown": "Not run yet: the baseline check failed. Before building an adapter we tried to reproduce Laya's published\nbaselines on `LocalLLaMA/typed-decisions` (config `all`; train 1,200 cases / 6,000 decisions, test 400 cases /\n2,000 decisions; 20 question slots, 4 workflows \u00d7 5 questions; accuracy = argmax label == gold `label`).\n\n| baseline | published | ours |\n|---|---|---|\n| random guess (mean 1/#options) | 0.318 | **0.3175** (reproduces) |\n| majority class | 0.461 | **not reproduced** |\n\nMajority definitions tried (all fit on train unless noted), none gives 0.461: per (workflow, question) most\nfrequent label 0.4835; same from summed gold probabilities 0.4785; same scored against `label_agreement.argmax_majority`\n0.483\u20130.4855; per question id across workflows 0.4115 (prob-weighted 0.427); per question type 0.3105; per\n(type, #options) 0.3455; most frequent option index globally 0.2925 / per type 0.394; per (workflow, question) fit on\ntest itself 0.5225. BENCHMARKS.md does not define its majority baseline. Per the plan we stopped here rather than\nguess; the most natural definition (0.4835) is 0.023 above the published 0.461."
+}

@@ -126,7 +126,11 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
            "draws committed in `data/splits/`). ECE uses 15 equal-width bins; \"ECE (TS)\" is after one "
            "temperature fit on the 500-example calib split. Sel@80 = accuracy on the 80% most-confident "
            "test examples. p50 latency is per example in single-example mode on an M1 (16 GB), model load "
-           "excluded (few-shot: encode + head). Δ acc vs Laya: paired bootstrap over the 1,000 test examples "
+           "excluded (few-shot: encode + head); it comes from each run's own timings, so for `nli` on ag_news/emotion "
+           "it is the old per-pair HF pipeline (predictions kept, see the latency sections for the batched runner). "
+           "Machine note: the M1 was under heavy memory pressure (swap ~27 GB used by other processes) during these "
+           "runs, so absolute latencies are noisy (e.g. the per-pair pipeline measured 367 ms p50 in one benchmark "
+           "and 692 ms in another); compare methods within the same benchmark table. Δ acc vs Laya: paired bootstrap over the 1,000 test examples "
            "(10,000 resamples, fixed seed), percentile 95% CI; * = CI excludes 0. For k-shot rows each example's "
            "score is the share of the seeds that got it right (mean over seeds per example), so the CI covers "
            "test-set sampling, not seed-to-seed variation (that is the ± std).", ""]
@@ -216,7 +220,7 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
     out += ["## Accuracy vs latency", "",
             "Per task: test accuracy (few-shot: mean over seeds) against single-example p50 latency on the M1. Latency "
             "comes from the benchmark above where it covers the task, otherwise from the run's own per-example timings "
-            "(NLI on ag_news/emotion then being the old per-pair pipeline, so those points use the benchmark). "
+            "(for NLI on emotion that is the old per-pair HF pipeline, slower than the batched runner). "
             "★ = Pareto-optimal (no other point is both at least as accurate and at least as fast, and strictly better in one). "
             "Laya appears twice where both runtimes were timed: MLX (its optimised runtime) and PyTorch MPS (same "
             "runtime as every other method). Few-shot latency: encode + head.", ""]
@@ -230,6 +234,8 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
                 ms, src = bench[task][key]["p50_ms"], "benchmark"
             elif r.get("p50_ms"):
                 ms, src = r["p50_ms"]["mean"], "run"
+                if r["method"] == "nli" and task in ("ag_news", "emotion"):
+                    src = "run (old per-pair HF pipeline)"
             else:
                 continue
             name = r["method"] + (f" k={r['k']}" if r["k"] else "")
@@ -276,6 +282,13 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
     out += ["## Notes", "",
             "- Laya's `confidence` field is 1 − normalised entropy, not a probability of being right; every "
             "calibration number here uses Laya's per-option probabilities instead.",
+            "- embed-zs / embed-zs-base: probabilities are softmax(cosine / τ) with τ = 0.05 fixed before any "
+            "result was seen; their raw ECE reflects that arbitrary τ, and \"ECE (TS)\" (temperature fit on calib) "
+            "is the comparable number, exactly as for every other method.",
+            "- embed-lr's high raw ECE is under-confidence: an L2-regularised logistic regression on unit-norm "
+            "embeddings from a handful of examples gives flat probabilities; temperature scaling on calib fixes it.",
+            "- nli-xsmall: skipped, no `deberta-v3-xsmall-zeroshot-v2.0` checkpoint exists on the Hub.",
+            "- Jev: not run (API key access was not available to this run).",
             "- Related work: nibzard/decision-model-benchmark compares Jev with 8 LLMs and trivial baselines "
             "(no trained classifiers); this repo adds the classifiers we already had.", ""]
     return "\n".join(out)
