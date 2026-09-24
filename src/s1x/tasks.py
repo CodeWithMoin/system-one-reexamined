@@ -46,8 +46,10 @@ TASKS: dict[str, Task] = {
             "Which emotion does this message express?",
         ),
         Task(
-            "banking77", "PolyAI/banking77", "choice", "text", "label",
-            (),  # filled from the dataset's own label names
+            # PolyAI/banking77 is a loading script, which `datasets` no longer runs; mteb/banking77
+            # is the same data as parquet (train 9,993 rows after its de-duplication, test 3,076).
+            "banking77", "mteb/banking77", "choice", "text", "label",
+            (),  # filled from the dataset's own label names, "_" -> " "
             "What is the customer asking the bank about?",
         ),
         Task(
@@ -85,7 +87,15 @@ def _load(task: Task):
     from datasets import load_dataset
 
     ds = load_dataset(task.hf_id)
-    labels = task.labels or tuple(ds["train"].features[task.label_field].names)
+    labels = task.labels
+    if not labels:
+        feature = ds["train"].features[task.label_field]
+        if hasattr(feature, "names"):
+            names = list(feature.names)
+        else:  # plain int labels with a label_text column
+            pairs = dict(zip(ds["train"][task.label_field], ds["train"]["label_text"]))
+            names = [pairs[i] for i in range(len(pairs))]
+        labels = tuple(n.replace("_", " ") for n in names)
     train = ds["train"]
     test = ds["test"] if task.has_test_split else None
     return train, test, labels
