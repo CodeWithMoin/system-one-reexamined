@@ -125,12 +125,11 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
            "examples per task. k-shot rows are mean ± sample std over the seeds listed (k examples per class, "
            "draws committed in `data/splits/`). ECE uses 15 equal-width bins; \"ECE (TS)\" is after one "
            "temperature fit on the 500-example calib split. Sel@80 = accuracy on the 80% most-confident "
-           "test examples. p50 latency is per example in single-example mode on an M1 (16 GB), model load "
-           "excluded (few-shot: encode + head); it comes from each run's own timings, so for `nli` on ag_news/emotion "
-           "it is the old per-pair HF pipeline (predictions kept, see the latency sections for the batched runner). "
-           "Machine note: the M1 was under heavy memory pressure (swap ~27 GB used by other processes) during these "
-           "runs, so absolute latencies are noisy (e.g. the per-pair pipeline measured 367 ms p50 in one benchmark "
-           "and 692 ms in another); compare methods within the same benchmark table. Δ acc vs Laya: paired bootstrap over the 1,000 test examples "
+           "test examples. The p50 ms column in the per-task tables is each run's own per-example timing on the M1 "
+           "(16 GB) and is NOT the headline speed number: those runs were taken while the benchmark itself was "
+           "leaking GPU memory into swap (see Notes). Headline speed = the \"Latency\" sections below, measured on an "
+           "M4 Pro (24 GB) with each method in its own process and swap flat throughout "
+           "(`results/latency_m4.json`, memory log in `results/latency_m4_memory.log`). Δ acc vs Laya: paired bootstrap over the 1,000 test examples "
            "(10,000 resamples, fixed seed), percentile 95% CI; * = CI excludes 0. For k-shot rows each example's "
            "score is the share of the seeds that got it right (mean over seeds per example), so the CI covers "
            "test-set sampling, not seed-to-seed variation (that is the ± std).", ""]
@@ -171,7 +170,11 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
                         f"{best} ({'; '.join(bits)})."]
         out.append("")
 
-    lat = RESULTS / "latency.json"
+    # Headline latency: the M4 Pro run (one process per method, flat swap). Falls back to the M1 run.
+    lat = RESULTS / "latency_m4.json"
+    machine = "M4 Pro 24 GB, one process per method, swap flat"
+    if not lat.exists():
+        lat, machine = RESULTS / "latency.json", "M1 16 GB (taken under swap; provisional)"
     bench = json.loads(lat.read_text()).get("benchmark_v2", {}) if lat.exists() else {}
     torch_methods = [("laya-torch", "Laya (upstream PyTorch)"), ("nli", "NLI DeBERTa-v3-large"),
                      ("nli-base", "NLI DeBERTa-v3-base"), ("embed-zs", "embed-zs (bge-small)"),
@@ -181,7 +184,7 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
         b_ = bench.get(task)
         if not b_:
             continue
-        out += [f"## Latency on {task} ({b_['options']} options; same {b_['n']} test examples, after warm-up, M1 16 GB)", "",
+        out += [f"## Latency on {task} ({b_['options']} options; same {b_['n']} test examples, after warm-up, {machine})", "",
                 "Primary comparison: everything on the same runtime (PyTorch, MPS). Single = one input per forward "
                 "pass (NLI: all its hypotheses in that one pass); batched = several inputs per pass, per-example "
                 "time = pass wall time / batch size. Few-shot rows time inference only.", "",
@@ -218,7 +221,7 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
         out.append("")
 
     out += ["## Accuracy vs latency", "",
-            "Per task: test accuracy (few-shot: mean over seeds) against single-example p50 latency on the M1. Latency "
+            "Per task: test accuracy (few-shot: mean over seeds) against single-example p50 latency. Latency "
             "comes from the benchmark above where it covers the task, otherwise from the run's own per-example timings "
             "(for NLI on emotion that is the old per-pair HF pipeline, slower than the batched runner). "
             "★ = Pareto-optimal (no other point is both at least as accurate and at least as fast, and strictly better in one). "
@@ -288,7 +291,14 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
             "- embed-lr's high raw ECE is under-confidence: an L2-regularised logistic regression on unit-norm "
             "embeddings from a handful of examples gives flat probabilities; temperature scaling on calib fixes it.",
             "- nli-xsmall: skipped, no `deberta-v3-xsmall-zeroshot-v2.0` checkpoint exists on the Hub.",
-            "- Jev: not run (API key access was not available to this run).",
+            "- Jev: TypeSafe API (`jev-latest`, reported `jev-1.13.0`), zero-shot, same instruction and label wording as "
+            "Laya; its latency is an API round trip including the network (~830 ms p50 from India) and is never mixed "
+            "into the local speed tables. Jev returns exact 0/1 probabilities on many items (62% of AG News "
+            "predictions); where it said 1.0 it was right 77% of the time on Emotion and 79% on SST-5.",
+            "- Latency history: the first benchmark loaded every model into one process; MPS/MLX memory is not freed "
+            "by `del` + `gc.collect()`, so it grew to a 26 GB footprint on a 24 GB M4 and ~11 GB of swap. The M1's "
+            "\"memory pressure\" was almost certainly the same leak. Fixed by running each (task, method) in its own "
+            "process; the M1 numbers in `results/latency.json` are kept for the record only.",
             "- Related work: nibzard/decision-model-benchmark compares Jev with 8 LLMs and trivial baselines "
             "(no trained classifiers); this repo adds the classifiers we already had.", ""]
     return "\n".join(out)
