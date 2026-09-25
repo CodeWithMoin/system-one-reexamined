@@ -65,7 +65,7 @@ def fig_speed(latency_path: Path) -> Path:
     offsets = {
         "ag_news": {"Laya (PyTorch)": (8, 6), "Laya (MLX runtime)": (-8, 8, "right"), "NLI-large": (8, -12),
                     "NLI-base": (-8, -14, "right"), "Bi-encoder ZS": (8, 4), "SetFit, 16 labels": (8, -12),
-                    "Emb+LR, 16 labels": (-8, 8, "right"), "Jev": (-8, -14, "right")},
+                    "Emb+LR, 16 labels": (8, 6), "Jev": (-8, -14, "right")},
         "banking77": {"Laya (PyTorch)": (8, -12), "Laya (MLX runtime)": (-8, 8, "right"), "NLI-large": (8, 4),
                       "NLI-base": (-8, -14, "right"), "Bi-encoder ZS": (8, 4), "SetFit, 16 labels": (8, -12),
                       "Emb+LR, 16 labels": (8, 6), "Jev": (-8, 8, "right")},
@@ -97,7 +97,7 @@ def fig_speed(latency_path: Path) -> Path:
         ax.scatter(jx, jy, s=90, facecolor=SURFACE, edgecolor=ORANGE, linewidth=2, zorder=4)
         place(ax, task, "Jev (API, incl. network)", "Jev", jx, jy)
         ax.set_xscale("log")
-        ax.set_xlim(5, 5000)
+        ax.set_xlim(3, 5000)
         ax.set_ylim(*ylims[task])
         ax.set_title(TASKS[task], loc="left")
         ax.set_xlabel("Median latency per decision (ms, log scale) — lower is faster")
@@ -181,7 +181,9 @@ def fig_reliability() -> Path:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--latency", default=str(ROOT / "results" / "latency.json"))
+    # The M4 run is the headline: one process per method, swap flat throughout (see
+    # results/latency_m4_memory.log). The M1 run (latency.json) was taken under self-inflicted swap.
+    ap.add_argument("--latency", default=str(ROOT / "results" / "latency_m4.json"))
     a = ap.parse_args()
     for f in (fig_speed(Path(a.latency)), fig_labels(), fig_reliability()):
         print("wrote", f.relative_to(ROOT))
