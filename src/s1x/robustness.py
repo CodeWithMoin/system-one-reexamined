@@ -27,14 +27,24 @@ def permutations(c: int) -> list[list[int]]:
 
 
 def run(methods=("laya", "nli")) -> dict:
-    out: dict = {"n": N, "note": "flip = argmax label differs from the original option order"}
+    """Adds to results/option_order.json rather than replacing it, so methods can be run separately.
+
+    For API models (Jev) the original order is also run a second time: `repeat_flip_rate` is the
+    share of answers that change with NOTHING changed, i.e. the noise floor an order effect must beat.
+    """
+    path = RESULTS / "option_order.json"
+    out: dict = json.loads(path.read_text()) if path.exists() else {}
+    out |= {"n": N, "note": "flip = argmax label differs from the original option order"}
     for method in methods:
         if method == "laya":
             from s1x.runners.laya import LayaRunner
             runner = LayaRunner("laya")
+        elif method == "jev":
+            from s1x.runners.jev import JevRunner
+            runner = JevRunner()
         else:
-            from s1x.runners.nli import NLIRunner
-            runner = NLIRunner()
+            from s1x.runners.nli import MODELS, NLIRunner
+            runner = NLIRunner(model=MODELS.get(method, MODELS["nli"]))
         for task in TASKS:
             data = load_task(task)
             texts, labels = data.test.texts[:N], data.labels
@@ -49,8 +59,11 @@ def run(methods=("laya", "nli")) -> dict:
                 any_flip |= changed
             out[f"{method}/{task}"] = {"permutations": permutations(len(labels)), "flip_rate": flips,
                                       "mean_flip_rate": float(np.mean(flips)), "any_flip_rate": float(any_flip.mean())}
+            if method == "jev":  # same order again: how much changes from API noise alone
+                again, _, _ = runner.predict(data.task, labels, texts)
+                out[f"{method}/{task}"]["repeat_flip_rate"] = float((again.argmax(1) != base.argmax(1)).mean())
             print(method, task, out[f"{method}/{task}"])
         del runner
         gc.collect()
-    (RESULTS / "option_order.json").write_text(json.dumps(out, indent=1))
+    path.write_text(json.dumps(out, indent=1))
     return out

@@ -272,11 +272,19 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
         o = json.loads(oo.read_text())
         out += ["## Option-order robustness (first 200 test examples, 3 fixed permutations)", "",
                 "Flip rate = share of examples whose predicted label changes versus the original option order.", "",
-                "| Method / task | flip rate per permutation | mean | any of the 3 |", "|---|---|---|---|"]
+                "| Method / task | flip rate per permutation | mean | any of the 3 | same order again (noise) |",
+                "|---|---|---|---|---|"]
         for key, s_ in o.items():
             if isinstance(s_, dict):
-                out.append(f"| {key} | {', '.join(f'{v:.3f}' for v in s_['flip_rate'])} | {s_['mean_flip_rate']:.3f} | {s_['any_flip_rate']:.3f} |")
-        out.append("")
+                noise = f"{s_['repeat_flip_rate']:.3f}" if "repeat_flip_rate" in s_ else "– (deterministic)"
+                out.append(f"| {key} | {', '.join(f'{v:.3f}' for v in s_['flip_rate'])} | {s_['mean_flip_rate']:.3f} | "
+                           f"{s_['any_flip_rate']:.3f} | {noise} |")
+        out += ["", "Jev is an API, so its original order was asked a second time: the \"noise\" column is how much "
+                "changes with nothing changed. Jev's order flips (≈2%) sit above that floor (0–0.5%). NLI scores each "
+                "option in its own pair, so order cannot matter. On AG News (4 options) the third, random permutation "
+                "happened to equal the second, so that task effectively tested two distinct orders. Related: "
+                "nibzard/decision-model-benchmark reports Jev changing 13% of choices under permuted options on "
+                "Banking77 (77 options).", ""]
 
     td = RESULTS / "typed_decisions.json"
     if td.exists():

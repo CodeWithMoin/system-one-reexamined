@@ -278,12 +278,16 @@ Per task: test accuracy (few-shot: mean over seeds) against single-example p50 l
 
 Flip rate = share of examples whose predicted label changes versus the original option order.
 
-| Method / task | flip rate per permutation | mean | any of the 3 |
-|---|---|---|---|
-| laya/ag_news | 0.010, 0.015, 0.015 | 0.013 | 0.020 |
-| laya/emotion | 0.055, 0.050, 0.065 | 0.057 | 0.105 |
-| nli/ag_news | 0.000, 0.000, 0.000 | 0.000 | 0.000 |
-| nli/emotion | 0.000, 0.000, 0.000 | 0.000 | 0.000 |
+| Method / task | flip rate per permutation | mean | any of the 3 | same order again (noise) |
+|---|---|---|---|---|
+| laya/ag_news | 0.010, 0.015, 0.015 | 0.013 | 0.020 | – (deterministic) |
+| laya/emotion | 0.055, 0.050, 0.065 | 0.057 | 0.105 | – (deterministic) |
+| nli/ag_news | 0.000, 0.000, 0.000 | 0.000 | 0.000 | – (deterministic) |
+| nli/emotion | 0.000, 0.000, 0.000 | 0.000 | 0.000 | – (deterministic) |
+| jev/ag_news | 0.010, 0.020, 0.020 | 0.017 | 0.025 | 0.005 |
+| jev/emotion | 0.025, 0.010, 0.020 | 0.018 | 0.035 | 0.000 |
+
+Jev is an API, so its original order was asked a second time: the "noise" column is how much changes with nothing changed. Jev's order flips (≈2%) sit above that floor (0–0.5%). NLI scores each option in its own pair, so order cannot matter. On AG News (4 options) the third, random permutation happened to equal the second, so that task effectively tested two distinct orders. Related: nibzard/decision-model-benchmark reports Jev changing 13% of choices under permuted options on Banking77 (77 options).
 
 ## On Laya's own benchmark
 

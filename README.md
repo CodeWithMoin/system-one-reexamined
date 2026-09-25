@@ -90,7 +90,7 @@ not a zero-shot decision engine."
 
 ## Also found
 
-- Reordering the options changes Laya's answer on 1–6% of examples. NLI: never.
+- Reordering the options changes the answer: Laya on 1–6% of examples, Jev on ~2% (above its 0–0.5% same-order noise). NLI: never.
 - With 77 options, Laya cuts labels to 3 tokens and some become identical.
 - Accuracy numbers use the MLX port of Laya. The official PyTorch release gives identical answers on all 400 checked examples.
 
