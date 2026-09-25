@@ -179,11 +179,81 @@ def fig_reliability() -> Path:
     return out
 
 
+def fig_hero() -> Path:
+    """One row per task, one dot per method on a shared accuracy scale: who wins where."""
+    methods = [  # (label, how to get accuracy, colour, marker, size)
+        ("Laya (zero-shot)", lambda t: acc(t, "laya"), BLUE, "o", 110),
+        ("Jev (zero-shot)", lambda t: acc(t, "jev"), ORANGE, "D", 80),
+        ("NLI-base, 2021 (zero-shot)", lambda t: acc(t, "nli-base"), GREY_DARK, "s", 70),
+        ("SetFit, 16 labels per class", lambda t: kshot(t, "setfit", 16)[0], AQUA, "^", 90),
+    ]
+    tasks = list(TASKS.items())[::-1]
+    fig, ax = plt.subplots(figsize=(11, 4.4))
+    for row, (task, title) in enumerate(tasks):
+        vals = [(label, f(task), c, m, s) for label, f, c, m, s in methods]
+        lo, hi = min(v[1] for v in vals), max(v[1] for v in vals)
+        ax.plot([lo, hi], [row, row], color=GRID, linewidth=3, zorder=1, solid_capstyle="round")
+        best = max(vals, key=lambda v: v[1])
+        for label, x, c, m, s in vals:
+            # Laya drawn last so a near-tie (Emotion: 0.587 vs Jev 0.592) doesn't hide it.
+            ax.scatter(x, row, s=s, marker=m, color=c, edgecolor=SURFACE, linewidth=1.5, zorder=4 if c == BLUE else 3)
+        ax.annotate(f"best: {best[0].split(' (')[0].split(',')[0]} {best[1]:.2f}", (hi, row), xytext=(10, 0),
+                    textcoords="offset points", va="center", fontsize=9, color=INK_2)
+    ax.set_yticks(range(len(tasks)), [title for _, title in tasks])
+    ax.tick_params(axis="y", length=0, labelsize=10, labelcolor=INK)
+    ax.set_xlim(0.25, 1.08)
+    ax.set_xlabel("Accuracy on 1,000 fixed test examples")
+    ax.grid(axis="y", visible=False)
+    ax.spines["left"].set_visible(False)
+    handles = [plt.Line2D([], [], marker=m, linestyle="", markersize=8, markerfacecolor=c, markeredgecolor=c, label=label)
+               for label, _, c, m, _ in methods]
+    ax.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.45, 0.99), ncol=4, fontsize=9, handletextpad=0.3,
+              columnspacing=1.4)
+    fig.suptitle("Each System One model wins one task. Older methods win the rest.", x=0.01, ha="left", y=0.99,
+                 fontsize=13.5, fontweight="bold", color=INK)
+    fig.tight_layout()
+    out = ROOT / "figures" / "hero.png"
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
+def fig_hero_bars() -> Path:
+    """Grouped bars, zero baseline: the same data as the hero dot plot, for comparison."""
+    methods = [("Laya (zero-shot)", lambda t: acc(t, "laya"), BLUE),
+               ("Jev (zero-shot)", lambda t: acc(t, "jev"), ORANGE),
+               ("NLI-base, 2021 (zero-shot)", lambda t: acc(t, "nli-base"), GREY_DARK),
+               ("SetFit, 16 labels per class", lambda t: kshot(t, "setfit", 16)[0], AQUA)]
+    tasks = list(TASKS.items())
+    fig, ax = plt.subplots(figsize=(11, 4.6))
+    width, gap = 0.19, 0.02
+    for j, (label, f, c) in enumerate(methods):
+        xs = [i + (j - 1.5) * (width + gap) for i in range(len(tasks))]
+        ys = [f(t) for t, _ in tasks]
+        ax.bar(xs, ys, width=width, color=c, label=label, zorder=3)
+        for x, y in zip(xs, ys):
+            ax.annotate(f"{y:.2f}", (x, y), xytext=(0, 2), textcoords="offset points", ha="center", va="bottom",
+                        fontsize=7.5, color=INK_2)
+    ax.set_xticks(range(len(tasks)), [title for _, title in tasks])
+    ax.tick_params(axis="x", length=0, labelsize=9.5, labelcolor=INK)
+    ax.set_ylim(0, 1.08)
+    ax.set_ylabel("Accuracy (1,000 test examples)")
+    ax.grid(axis="x", visible=False)
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 0.99), ncol=4, fontsize=9)
+    fig.suptitle("Each System One model wins one task. Older methods win the rest.", x=0.01, ha="left", y=0.99,
+                 fontsize=13.5, fontweight="bold", color=INK)
+    fig.tight_layout()
+    out = ROOT / "figures" / "hero_bars.png"
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     # The M4 run is the headline: one process per method, swap flat throughout (see
     # results/latency_m4_memory.log). The M1 run (latency.json) was taken under self-inflicted swap.
     ap.add_argument("--latency", default=str(ROOT / "results" / "latency_m4.json"))
     a = ap.parse_args()
-    for f in (fig_speed(Path(a.latency)), fig_labels(), fig_reliability()):
+    for f in (fig_hero(), fig_hero_bars(), fig_speed(Path(a.latency)), fig_labels(), fig_reliability()):
         print("wrote", f.relative_to(ROOT))
