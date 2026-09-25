@@ -227,21 +227,51 @@ Flip rate = share of examples whose predicted label changes versus the original 
 
 ## On Laya's own benchmark
 
-Not run yet: the baseline check failed. Before building an adapter we tried to reproduce Laya's published
-baselines on `LocalLLaMA/typed-decisions` (config `all`; train 1,200 cases / 6,000 decisions, test 400 cases /
-2,000 decisions; 20 question slots, 4 workflows × 5 questions; accuracy = argmax label == gold `label`).
+`LocalLLaMA/typed-decisions`, config `all`: test = all 400 cases / 2,000 decisions (5 typed questions per case, 4 workflows × 5 question slots). Scored per decision exactly as Laya's own eval (`research/scripts/bench_local.py`): options indexed choice → criteria keys in order, noul → [false, true], score → levels 0..n−1; correct when argmax = gold `label`; ECE = 15 equal-width bins on the top probability. Temperatures are fit on a fixed 20% of *train* cases (1,200 decisions), never on test.
 
-| baseline | published | ours |
-|---|---|---|
-| random guess (mean 1/#options) | 0.318 | **0.3175** (reproduces) |
-| majority class | 0.461 | **not reproduced** |
+**Summary.** Laya's own numbers reproduce: base `laya` 0.361 (published 0.361) and `laya-typed-decisions` 0.7665 (published 0.766, ECE 0.214 vs 0.213, and per workflow to within 0.002). Base Laya zero-shot is below the majority baseline and below a 2020-style zero-shot NLI model (`nli-base`, 0.485). The 0.766 belongs to a checkpoint fine-tuned on this benchmark's train split. A plain classifier trained on the same split (`embed-lr-slot`, 0.564) is 0.20 below it, and zero-shot Jev (0.736) is 0.03 below it. Among zero-shot models, only Jev clears the majority baseline by a wide margin.
 
-Majority definitions tried (all fit on train unless noted), none gives 0.461: per (workflow, question) most
-frequent label 0.4835; same from summed gold probabilities 0.4785; same scored against `label_agreement.argmax_majority`
-0.483–0.4855; per question id across workflows 0.4115 (prob-weighted 0.427); per question type 0.3105; per
-(type, #options) 0.3455; most frequent option index globally 0.2925 / per type 0.394; per (workflow, question) fit on
-test itself 0.5225. BENCHMARKS.md does not define its majority baseline. Per the plan we stopped here rather than
-guess; the most natural definition (0.4835) is 0.023 above the published 0.461.
+| method | labels used | accuracy (ours) | published | ECE (ours) | published ECE | ECE after TS | soft acc | score MAE |
+|---|---|---|---|---|---|---|---|---|
+| random (expected, 1/#options) | 0 | **0.318** | 0.318 | — | — | — | — | — |
+| majority (per workflow×question, train) | train prior | **0.483** | 0.461 | 0.039 | — | 0.044 | 0.390 | 0.572 |
+| laya (base, zero-shot) | 0 | **0.361** | 0.361 | 0.175 | 0.175 | 0.041 | 0.331 | 0.694 |
+| laya-typed-decisions (fine-tuned on train) | 6,000 train decisions (their fine-tune) | **0.766** | 0.766 | 0.214 | 0.213 | 0.073 | 0.471 | 0.242 |
+| nli-base (DeBERTa-v3-base zero-shot NLI) | 0 | **0.485** | — | 0.109 | — | 0.048 | 0.402 | 0.539 |
+| embed-lr (bge-small pair + one binary LR, full train) | 6,000 train decisions | **0.459** | — | 0.067 | — | 0.045 | 0.346 | 0.663 |
+| embed-lr-slot (bge-small state + one LR per slot, full train) | 6,000 train decisions | **0.564** | — | 0.037 | — | 0.035 | 0.408 | 0.551 |
+| jev (API, zero-shot) | 0 | **0.736** | 0.727 | 0.044 | 0.144 | 0.038 | 0.538 | 0.390 |
+| laya-multilingual | 0 | not run | 0.352 | | 0.314 | | | |
+
+Per workflow and per question type (accuracy):
+
+| method | agent trace observability | customer service | invoice processing | security incidents | choice | score | noul |
+|---|---|---|---|---|---|---|---|
+| majority | 0.362 | 0.452 | 0.518 | 0.602 | 0.418 | 0.414 | 0.642 |
+| laya | 0.386 | 0.382 | 0.360 | 0.316 | 0.287 | 0.323 | 0.487 |
+| laya-td | 0.730 | 0.766 | 0.804 | 0.766 | 0.733 | 0.724 | 0.857 |
+| nli-base | 0.438 | 0.602 | 0.480 | 0.422 | 0.447 | 0.386 | 0.657 |
+| embed-lr | 0.360 | 0.402 | 0.520 | 0.554 | 0.433 | 0.345 | 0.637 |
+| embed-lr-slot | 0.398 | 0.618 | 0.602 | 0.636 | 0.555 | 0.468 | 0.700 |
+| jev | 0.634 | 0.782 | 0.782 | 0.746 | 0.735 | 0.701 | 0.783 |
+| laya-td, published | 0.730 | 0.764 | 0.804 | 0.766 | | | |
+
+**Majority baseline — our definition differs from theirs.** Ours: for each (workflow, question) slot, the most frequent gold `label` on the full train split, predicted for every test case (probabilities = the train label frequencies of that slot). It scores **0.4835** against the **0.461** Laya publishes. Laya's scripts hard-code 0.4610 as `per_question_majority_class` without code or a definition, so we could not reproduce it. We tried about ten definitions (per question id across workflows 0.4115, per question type 0.3105, prob-weighted priors 0.4785, scored against `label_agreement.argmax_majority` 0.483–0.4855, fit on test itself 0.5225); none gives 0.461. The dataset card itself gives two further, different floors: "Prior" 0.470 (per-question train frequencies) and "Majority baseline" 0.520 (measured over all 1,600 cases). The gap to 0.461 is 0.02 points and changes no conclusion below; we report our own number and state the definition.
+
+**Random**: expected accuracy of a uniform guess, mean of 1/#options over the test decisions — reproduces their 0.318 (0.3175).
+
+Other definition notes:
+- `laya-typed-decisions` was fine-tuned by Convai on this benchmark's train split, so it is a *specialist*; the dataset card warns that specialist and zero-shot (generalist) numbers are not comparable. Its temperature for "ECE after TS" is fit on train cases it was trained on, so that one TS number is optimistic about its held-out calibration. We ran the MLX FP16 conversion (`aac6fef/laya-typed-decisions-mlx`, source revision f9ab0b2); base `laya` is `aac6fef/laya-mlx`. Both via `agent.predict(state, questions)`, one call per case, state as the parsed JSON dict — the same call their notebook makes.
+- Laya's fine-tuning notebook scores noul as p(true) ≥ 0.5 rather than argmax; the two differ only on an exact 0.5 tie (count per method in `typed_decisions.json`, `noul_exact_ties`).
+- Laya's published ECE is on the shipped temperatures; our "ECE (ours)" is the same (raw model output). "ECE after TS" is one temperature per method, fit on the 20% train slice.
+- `nli-base`: premise = the state JSON (DeBERTa truncates the premise at 512 tokens); hypotheses "<question> Answer: <option>" for choice/score (option rendered as Laya renders it), "It is false/true that <statement>" for noul; entailment logits softmaxed across the decision's options. Written once, not tuned.
+- `embed-lr` is a simple supervised cross-feature baseline: bge-small embeds each "question + option + state" text; one binary logistic regression ("is this the gold option?") is trained over every option of all 6,000 train decisions; per test decision the option logits are softmaxed and the argmax wins. Its calib predictions come from a twin model trained without the calib cases.
+- `embed-lr-slot` (added because the premise for the pair design did not hold): every (workflow, question) slot has a fixed option set in this dataset — all 1,600 cases use identical question definitions — so the ordinary classifier recipe works: embed the state once with bge-small, one multinomial logistic regression per slot (20 heads). This is the like-for-like counterpart of the dataset card's MiniLM-L6 specialist (0.587) and of `laya-typed-decisions`, which is also trained on these 20 slots.
+- `jev`: TypeSafe API, `model: jev-latest` (reported version in `typed_decisions.json`), one call per case with all five questions, state as the parsed JSON object.
+- Context: base `laya` (512 tokens) cuts the state on 34 of 2,000 test decisions; `laya-typed-decisions` (1,024) on 0. Counted, not changed.
+- Soft accuracy = Σ p·gold distribution; score MAE = |expected level − gold `score`|, as in Laya's eval.
+- Jev reported itself as jev-1.13.0 on every call (the published 0.727 is the same version, measured by the dataset card's author on 2026-09-18 and copied into Laya's table). Ours: 0.7360 (0.7375 with the notebook's noul ≥ 0.5 rule; 5 exact 0.5 noul answers). The +0.009 accuracy gap is within what an API model re-run on another day, possibly with the state sent as a string rather than an object, can move. The ECE gap is not: we get 0.044 against the published 0.144, with mean top probability 0.756 vs accuracy 0.736 (over-confidence +0.020; the card itself states +0.023, so the confidence level agrees). Neither the card nor Laya's table defines that ECE, so we cannot tell whether the gap is a different definition or a different run. We report 15-bin top-label ECE for every model: the definition in Laya's own script, under which we reproduce Laya's published 0.213 and 0.175.
+- `laya-typed-decisions` is *under*-confident here (mean top probability 0.553 vs accuracy 0.766); the fitted temperature is 0.21 (< 1 sharpens). Base `laya` is over-confident (0.536 vs 0.361; temperature 4.60).
 
 ## Notes
 

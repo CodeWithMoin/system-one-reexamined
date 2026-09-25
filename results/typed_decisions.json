@@ -1,21 +1,377 @@
 {
- "status": "stopped: majority baseline not reproduced",
- "random_ours": 0.3175,
- "majority_published": 0.461,
- "majority_candidates": {
-  "per_workflow_question_train": 0.4835,
-  "per_workflow_question_train_probsum": 0.4785,
-  "vs_argmax_majority": [
-   0.483,
-   0.4855
-  ],
-  "per_question_id": 0.4115,
-  "per_question_id_probsum": 0.427,
-  "per_type": 0.3105,
-  "per_type_and_k": 0.3455,
-  "global_index": 0.2925,
-  "per_type_index": 0.394,
-  "per_workflow_question_fit_on_test": 0.5225
+ "dataset": "LocalLLaMA/typed-decisions (all)",
+ "n_test_decisions": 2000,
+ "n_calib_decisions": 1200,
+ "published": {
+  "laya-td": {
+   "accuracy": 0.766,
+   "ece": 0.213,
+   "soft_accuracy": 0.471,
+   "score_mae": 0.242,
+   "by_workflow": {
+    "agent_trace_observability": 0.73,
+    "customer_service": 0.764,
+    "invoice_processing": 0.804,
+    "security_incidents": 0.766
+   }
+  },
+  "laya": {
+   "accuracy": 0.361,
+   "ece": 0.175,
+   "soft_accuracy": 0.332,
+   "score_mae": 0.694
+  },
+  "laya-ml": {
+   "accuracy": 0.352,
+   "ece": 0.314,
+   "soft_accuracy": 0.328,
+   "score_mae": 0.76
+  },
+  "jev": {
+   "accuracy": 0.727,
+   "ece": 0.144,
+   "soft_accuracy": 0.58,
+   "score_mae": 0.391
+  },
+  "majority": {
+   "accuracy": 0.461
+  },
+  "random": {
+   "accuracy": 0.318
+  }
  },
- "markdown": "Not run yet: the baseline check failed. Before building an adapter we tried to reproduce Laya's published\nbaselines on `LocalLLaMA/typed-decisions` (config `all`; train 1,200 cases / 6,000 decisions, test 400 cases /\n2,000 decisions; 20 question slots, 4 workflows \u00d7 5 questions; accuracy = argmax label == gold `label`).\n\n| baseline | published | ours |\n|---|---|---|\n| random guess (mean 1/#options) | 0.318 | **0.3175** (reproduces) |\n| majority class | 0.461 | **not reproduced** |\n\nMajority definitions tried (all fit on train unless noted), none gives 0.461: per (workflow, question) most\nfrequent label 0.4835; same from summed gold probabilities 0.4785; same scored against `label_agreement.argmax_majority`\n0.483\u20130.4855; per question id across workflows 0.4115 (prob-weighted 0.427); per question type 0.3105; per\n(type, #options) 0.3455; most frequent option index globally 0.2925 / per type 0.394; per (workflow, question) fit on\ntest itself 0.5225. BENCHMARKS.md does not define its majority baseline. Per the plan we stopped here rather than\nguess; the most natural definition (0.4835) is 0.023 above the published 0.461."
+ "methods": {
+  "random": {
+   "accuracy": 0.3175
+  },
+  "majority": {
+   "n": 2000,
+   "accuracy": 0.4835,
+   "ece": 0.03866665000000001,
+   "soft_accuracy": 0.38966737793227807,
+   "mean_confidence": 0.51483325,
+   "score_mae": 0.5723799925,
+   "ece_ts": 0.04449541955361492,
+   "temperature": 0.9341487299739599,
+   "by_workflow": {
+    "agent_trace_observability": 0.362,
+    "customer_service": 0.452,
+    "invoice_processing": 0.518,
+    "security_incidents": 0.602
+   },
+   "by_qtype": {
+    "choice": 0.41833333333333333,
+    "score": 0.41375,
+    "noul": 0.6416666666666667
+   },
+   "by_question": {
+    "agent_trace_observability/action": 0.36,
+    "agent_trace_observability/needs_review": 0.55,
+    "agent_trace_observability/outcome": 0.26,
+    "agent_trace_observability/risk": 0.28,
+    "agent_trace_observability/urgency": 0.36,
+    "customer_service/action": 0.52,
+    "customer_service/category": 0.18,
+    "customer_service/churn_risk": 0.47,
+    "customer_service/needs_human": 0.67,
+    "customer_service/urgency": 0.42,
+    "invoice_processing/discrepancy_severity": 0.47,
+    "invoice_processing/disposition": 0.45,
+    "invoice_processing/duplicate": 0.89,
+    "invoice_processing/matches_order": 0.46,
+    "invoice_processing/urgency": 0.32,
+    "security_incidents/credential_compromise": 0.55,
+    "security_incidents/disposition": 0.74,
+    "security_incidents/severity": 0.49,
+    "security_incidents/true_positive": 0.73,
+    "security_incidents/urgency": 0.5
+   },
+   "accuracy_noul_ge_0.5": 0.4835,
+   "noul_exact_ties": 0
+  },
+  "laya": {
+   "n": 2000,
+   "accuracy": 0.361,
+   "ece": 0.175187922,
+   "soft_accuracy": 0.33148392205196525,
+   "mean_confidence": 0.536187922,
+   "score_mae": 0.69357903875,
+   "ece_ts": 0.04079004731772953,
+   "temperature": 4.604382744509205,
+   "by_workflow": {
+    "agent_trace_observability": 0.386,
+    "customer_service": 0.382,
+    "invoice_processing": 0.36,
+    "security_incidents": 0.316
+   },
+   "by_qtype": {
+    "choice": 0.2866666666666667,
+    "score": 0.3225,
+    "noul": 0.4866666666666667
+   },
+   "by_question": {
+    "agent_trace_observability/action": 0.31,
+    "agent_trace_observability/needs_review": 0.58,
+    "agent_trace_observability/outcome": 0.39,
+    "agent_trace_observability/risk": 0.29,
+    "agent_trace_observability/urgency": 0.36,
+    "customer_service/action": 0.05,
+    "customer_service/category": 0.48,
+    "customer_service/churn_risk": 0.46,
+    "customer_service/needs_human": 0.67,
+    "customer_service/urgency": 0.25,
+    "invoice_processing/discrepancy_severity": 0.44,
+    "invoice_processing/disposition": 0.44,
+    "invoice_processing/duplicate": 0.11,
+    "invoice_processing/matches_order": 0.49,
+    "invoice_processing/urgency": 0.32,
+    "security_incidents/credential_compromise": 0.55,
+    "security_incidents/disposition": 0.05,
+    "security_incidents/severity": 0.32,
+    "security_incidents/true_positive": 0.52,
+    "security_incidents/urgency": 0.14
+   },
+   "accuracy_noul_ge_0.5": 0.361,
+   "noul_exact_ties": 0
+  },
+  "laya-td": {
+   "n": 2000,
+   "accuracy": 0.7665,
+   "ece": 0.21378624849999997,
+   "soft_accuracy": 0.47063501212740283,
+   "mean_confidence": 0.5527137514999999,
+   "score_mae": 0.24241046875000002,
+   "ece_ts": 0.07342534152073421,
+   "temperature": 0.21490700565127072,
+   "by_workflow": {
+    "agent_trace_observability": 0.73,
+    "customer_service": 0.766,
+    "invoice_processing": 0.804,
+    "security_incidents": 0.766
+   },
+   "by_qtype": {
+    "choice": 0.7333333333333333,
+    "score": 0.72375,
+    "noul": 0.8566666666666667
+   },
+   "by_question": {
+    "agent_trace_observability/action": 0.7,
+    "agent_trace_observability/needs_review": 0.84,
+    "agent_trace_observability/outcome": 0.65,
+    "agent_trace_observability/risk": 0.82,
+    "agent_trace_observability/urgency": 0.64,
+    "customer_service/action": 0.58,
+    "customer_service/category": 0.94,
+    "customer_service/churn_risk": 0.81,
+    "customer_service/needs_human": 0.76,
+    "customer_service/urgency": 0.74,
+    "invoice_processing/discrepancy_severity": 0.84,
+    "invoice_processing/disposition": 0.8,
+    "invoice_processing/duplicate": 0.92,
+    "invoice_processing/matches_order": 0.94,
+    "invoice_processing/urgency": 0.52,
+    "security_incidents/credential_compromise": 0.81,
+    "security_incidents/disposition": 0.73,
+    "security_incidents/severity": 0.78,
+    "security_incidents/true_positive": 0.87,
+    "security_incidents/urgency": 0.64
+   },
+   "accuracy_noul_ge_0.5": 0.7665,
+   "noul_exact_ties": 0
+  },
+  "nli-base": {
+   "n": 2000,
+   "accuracy": 0.4855,
+   "ece": 0.10912935999999998,
+   "soft_accuracy": 0.40152237804256163,
+   "mean_confidence": 0.591919883,
+   "score_mae": 0.5389414299999999,
+   "ece_ts": 0.04827968655712798,
+   "temperature": 2.0696008860986965,
+   "by_workflow": {
+    "agent_trace_observability": 0.438,
+    "customer_service": 0.602,
+    "invoice_processing": 0.48,
+    "security_incidents": 0.422
+   },
+   "by_qtype": {
+    "choice": 0.44666666666666666,
+    "score": 0.38625,
+    "noul": 0.6566666666666666
+   },
+   "by_question": {
+    "agent_trace_observability/action": 0.28,
+    "agent_trace_observability/needs_review": 0.64,
+    "agent_trace_observability/outcome": 0.44,
+    "agent_trace_observability/risk": 0.46,
+    "agent_trace_observability/urgency": 0.37,
+    "customer_service/action": 0.5,
+    "customer_service/category": 0.8,
+    "customer_service/churn_risk": 0.47,
+    "customer_service/needs_human": 0.72,
+    "customer_service/urgency": 0.52,
+    "invoice_processing/discrepancy_severity": 0.24,
+    "invoice_processing/disposition": 0.45,
+    "invoice_processing/duplicate": 0.89,
+    "invoice_processing/matches_order": 0.6,
+    "invoice_processing/urgency": 0.22,
+    "security_incidents/credential_compromise": 0.52,
+    "security_incidents/disposition": 0.21,
+    "security_incidents/severity": 0.43,
+    "security_incidents/true_positive": 0.57,
+    "security_incidents/urgency": 0.38
+   },
+   "accuracy_noul_ge_0.5": 0.4855,
+   "noul_exact_ties": 0
+  },
+  "embed-lr": {
+   "n": 2000,
+   "accuracy": 0.459,
+   "ece": 0.06745211749999999,
+   "soft_accuracy": 0.3460303128607629,
+   "mean_confidence": 0.4305068655,
+   "score_mae": 0.66275684625,
+   "ece_ts": 0.04472635532673078,
+   "temperature": 0.6718154283865747,
+   "by_workflow": {
+    "agent_trace_observability": 0.36,
+    "customer_service": 0.402,
+    "invoice_processing": 0.52,
+    "security_incidents": 0.554
+   },
+   "by_qtype": {
+    "choice": 0.43333333333333335,
+    "score": 0.345,
+    "noul": 0.6366666666666667
+   },
+   "by_question": {
+    "agent_trace_observability/action": 0.36,
+    "agent_trace_observability/needs_review": 0.54,
+    "agent_trace_observability/outcome": 0.26,
+    "agent_trace_observability/risk": 0.28,
+    "agent_trace_observability/urgency": 0.36,
+    "customer_service/action": 0.52,
+    "customer_service/category": 0.34,
+    "customer_service/churn_risk": 0.27,
+    "customer_service/needs_human": 0.67,
+    "customer_service/urgency": 0.21,
+    "invoice_processing/discrepancy_severity": 0.47,
+    "invoice_processing/disposition": 0.38,
+    "invoice_processing/duplicate": 0.89,
+    "invoice_processing/matches_order": 0.54,
+    "invoice_processing/urgency": 0.32,
+    "security_incidents/credential_compromise": 0.45,
+    "security_incidents/disposition": 0.74,
+    "security_incidents/severity": 0.49,
+    "security_incidents/true_positive": 0.73,
+    "security_incidents/urgency": 0.36
+   },
+   "accuracy_noul_ge_0.5": 0.459,
+   "noul_exact_ties": 0
+  },
+  "embed-lr-slot": {
+   "n": 2000,
+   "accuracy": 0.5635,
+   "ece": 0.03667325700000001,
+   "soft_accuracy": 0.40799158241889666,
+   "mean_confidence": 0.5347465180000001,
+   "score_mae": 0.55076451875,
+   "ece_ts": 0.034810957571493974,
+   "temperature": 0.8213059356750565,
+   "by_workflow": {
+    "agent_trace_observability": 0.398,
+    "customer_service": 0.618,
+    "invoice_processing": 0.602,
+    "security_incidents": 0.636
+   },
+   "by_qtype": {
+    "choice": 0.555,
+    "score": 0.4675,
+    "noul": 0.7
+   },
+   "by_question": {
+    "agent_trace_observability/action": 0.38,
+    "agent_trace_observability/needs_review": 0.63,
+    "agent_trace_observability/outcome": 0.27,
+    "agent_trace_observability/risk": 0.35,
+    "agent_trace_observability/urgency": 0.36,
+    "customer_service/action": 0.53,
+    "customer_service/category": 0.84,
+    "customer_service/churn_risk": 0.51,
+    "customer_service/needs_human": 0.67,
+    "customer_service/urgency": 0.54,
+    "invoice_processing/discrepancy_severity": 0.47,
+    "invoice_processing/disposition": 0.57,
+    "invoice_processing/duplicate": 0.89,
+    "invoice_processing/matches_order": 0.6,
+    "invoice_processing/urgency": 0.48,
+    "security_incidents/credential_compromise": 0.63,
+    "security_incidents/disposition": 0.74,
+    "security_incidents/severity": 0.5,
+    "security_incidents/true_positive": 0.78,
+    "security_incidents/urgency": 0.53
+   },
+   "accuracy_noul_ge_0.5": 0.5635,
+   "noul_exact_ties": 0
+  },
+  "jev": {
+   "n": 2000,
+   "accuracy": 0.736,
+   "ece": 0.044100048499999975,
+   "soft_accuracy": 0.5381088635096168,
+   "mean_confidence": 0.7557666715,
+   "score_mae": 0.38970349750000005,
+   "ece_ts": 0.03829090012958609,
+   "temperature": 1.2479816158274413,
+   "by_workflow": {
+    "agent_trace_observability": 0.634,
+    "customer_service": 0.782,
+    "invoice_processing": 0.782,
+    "security_incidents": 0.746
+   },
+   "by_qtype": {
+    "choice": 0.735,
+    "score": 0.70125,
+    "noul": 0.7833333333333333
+   },
+   "by_question": {
+    "agent_trace_observability/action": 0.58,
+    "agent_trace_observability/needs_review": 0.61,
+    "agent_trace_observability/outcome": 0.81,
+    "agent_trace_observability/risk": 0.67,
+    "agent_trace_observability/urgency": 0.5,
+    "customer_service/action": 0.66,
+    "customer_service/category": 0.93,
+    "customer_service/churn_risk": 0.84,
+    "customer_service/needs_human": 0.64,
+    "customer_service/urgency": 0.84,
+    "invoice_processing/discrepancy_severity": 0.72,
+    "invoice_processing/disposition": 0.66,
+    "invoice_processing/duplicate": 0.88,
+    "invoice_processing/matches_order": 0.96,
+    "invoice_processing/urgency": 0.69,
+    "security_incidents/credential_compromise": 0.8,
+    "security_incidents/disposition": 0.77,
+    "security_incidents/severity": 0.78,
+    "security_incidents/true_positive": 0.81,
+    "security_incidents/urgency": 0.57
+   },
+   "version": "jev-1.13.0",
+   "accuracy_noul_ge_0.5": 0.7375,
+   "noul_exact_ties": 5
+  }
+ },
+ "laya_state_truncated": {
+  "laya": {
+   "max_len": 512,
+   "state_truncated": 34,
+   "n": 2000
+  },
+  "laya-td": {
+   "max_len": 1024,
+   "state_truncated": 0,
+   "n": 2000
+  }
+ },
+ "markdown": "`LocalLLaMA/typed-decisions`, config `all`: test = all 400 cases / 2,000 decisions (5 typed questions per case, 4 workflows \u00d7 5 question slots). Scored per decision exactly as Laya's own eval (`research/scripts/bench_local.py`): options indexed choice \u2192 criteria keys in order, noul \u2192 [false, true], score \u2192 levels 0..n\u22121; correct when argmax = gold `label`; ECE = 15 equal-width bins on the top probability. Temperatures are fit on a fixed 20% of *train* cases (1,200 decisions), never on test.\n\n**Summary.** Laya's own numbers reproduce: base `laya` 0.361 (published 0.361) and `laya-typed-decisions` 0.7665 (published 0.766, ECE 0.214 vs 0.213, and per workflow to within 0.002). Base Laya zero-shot is below the majority baseline and below a 2020-style zero-shot NLI model (`nli-base`, 0.485). The 0.766 belongs to a checkpoint fine-tuned on this benchmark's train split. A plain classifier trained on the same split (`embed-lr-slot`, 0.564) is 0.20 below it, and zero-shot Jev (0.736) is 0.03 below it. Among zero-shot models, only Jev clears the majority baseline by a wide margin.\n\n| method | labels used | accuracy (ours) | published | ECE (ours) | published ECE | ECE after TS | soft acc | score MAE |\n|---|---|---|---|---|---|---|---|---|\n| random (expected, 1/#options) | 0 | **0.318** | 0.318 | \u2014 | \u2014 | \u2014 | \u2014 | \u2014 |\n| majority (per workflow\u00d7question, train) | train prior | **0.483** | 0.461 | 0.039 | \u2014 | 0.044 | 0.390 | 0.572 |\n| laya (base, zero-shot) | 0 | **0.361** | 0.361 | 0.175 | 0.175 | 0.041 | 0.331 | 0.694 |\n| laya-typed-decisions (fine-tuned on train) | 6,000 train decisions (their fine-tune) | **0.766** | 0.766 | 0.214 | 0.213 | 0.073 | 0.471 | 0.242 |\n| nli-base (DeBERTa-v3-base zero-shot NLI) | 0 | **0.485** | \u2014 | 0.109 | \u2014 | 0.048 | 0.402 | 0.539 |\n| embed-lr (bge-small pair + one binary LR, full train) | 6,000 train decisions | **0.459** | \u2014 | 0.067 | \u2014 | 0.045 | 0.346 | 0.663 |\n| embed-lr-slot (bge-small state + one LR per slot, full train) | 6,000 train decisions | **0.564** | \u2014 | 0.037 | \u2014 | 0.035 | 0.408 | 0.551 |\n| jev (API, zero-shot) | 0 | **0.736** | 0.727 | 0.044 | 0.144 | 0.038 | 0.538 | 0.390 |\n| laya-multilingual | 0 | not run | 0.352 | | 0.314 | | | |\n\nPer workflow and per question type (accuracy):\n\n| method | agent trace observability | customer service | invoice processing | security incidents | choice | score | noul |\n|---|---|---|---|---|---|---|---|\n| majority | 0.362 | 0.452 | 0.518 | 0.602 | 0.418 | 0.414 | 0.642 |\n| laya | 0.386 | 0.382 | 0.360 | 0.316 | 0.287 | 0.323 | 0.487 |\n| laya-td | 0.730 | 0.766 | 0.804 | 0.766 | 0.733 | 0.724 | 0.857 |\n| nli-base | 0.438 | 0.602 | 0.480 | 0.422 | 0.447 | 0.386 | 0.657 |\n| embed-lr | 0.360 | 0.402 | 0.520 | 0.554 | 0.433 | 0.345 | 0.637 |\n| embed-lr-slot | 0.398 | 0.618 | 0.602 | 0.636 | 0.555 | 0.468 | 0.700 |\n| jev | 0.634 | 0.782 | 0.782 | 0.746 | 0.735 | 0.701 | 0.783 |\n| laya-td, published | 0.730 | 0.764 | 0.804 | 0.766 | | | |\n\n**Majority baseline \u2014 our definition differs from theirs.** Ours: for each (workflow, question) slot, the most frequent gold `label` on the full train split, predicted for every test case (probabilities = the train label frequencies of that slot). It scores **0.4835** against the **0.461** Laya publishes. Laya's scripts hard-code 0.4610 as `per_question_majority_class` without code or a definition, so we could not reproduce it. We tried about ten definitions (per question id across workflows 0.4115, per question type 0.3105, prob-weighted priors 0.4785, scored against `label_agreement.argmax_majority` 0.483\u20130.4855, fit on test itself 0.5225); none gives 0.461. The dataset card itself gives two further, different floors: \"Prior\" 0.470 (per-question train frequencies) and \"Majority baseline\" 0.520 (measured over all 1,600 cases). The gap to 0.461 is 0.02 points and changes no conclusion below; we report our own number and state the definition.\n\n**Random**: expected accuracy of a uniform guess, mean of 1/#options over the test decisions \u2014 reproduces their 0.318 (0.3175).\n\nOther definition notes:\n- `laya-typed-decisions` was fine-tuned by Convai on this benchmark's train split, so it is a *specialist*; the dataset card warns that specialist and zero-shot (generalist) numbers are not comparable. Its temperature for \"ECE after TS\" is fit on train cases it was trained on, so that one TS number is optimistic about its held-out calibration. We ran the MLX FP16 conversion (`aac6fef/laya-typed-decisions-mlx`, source revision f9ab0b2); base `laya` is `aac6fef/laya-mlx`. Both via `agent.predict(state, questions)`, one call per case, state as the parsed JSON dict \u2014 the same call their notebook makes.\n- Laya's fine-tuning notebook scores noul as p(true) \u2265 0.5 rather than argmax; the two differ only on an exact 0.5 tie (count per method in `typed_decisions.json`, `noul_exact_ties`).\n- Laya's published ECE is on the shipped temperatures; our \"ECE (ours)\" is the same (raw model output). \"ECE after TS\" is one temperature per method, fit on the 20% train slice.\n- `nli-base`: premise = the state JSON (DeBERTa truncates the premise at 512 tokens); hypotheses \"<question> Answer: <option>\" for choice/score (option rendered as Laya renders it), \"It is false/true that <statement>\" for noul; entailment logits softmaxed across the decision's options. Written once, not tuned.\n- `embed-lr` is a simple supervised cross-feature baseline: bge-small embeds each \"question + option + state\" text; one binary logistic regression (\"is this the gold option?\") is trained over every option of all 6,000 train decisions; per test decision the option logits are softmaxed and the argmax wins. Its calib predictions come from a twin model trained without the calib cases.\n- `embed-lr-slot` (added because the premise for the pair design did not hold): every (workflow, question) slot has a fixed option set in this dataset \u2014 all 1,600 cases use identical question definitions \u2014 so the ordinary classifier recipe works: embed the state once with bge-small, one multinomial logistic regression per slot (20 heads). This is the like-for-like counterpart of the dataset card's MiniLM-L6 specialist (0.587) and of `laya-typed-decisions`, which is also trained on these 20 slots.\n- `jev`: TypeSafe API, `model: jev-latest` (reported version in `typed_decisions.json`), one call per case with all five questions, state as the parsed JSON object.\n- Context: base `laya` (512 tokens) cuts the state on 34 of 2,000 test decisions; `laya-typed-decisions` (1,024) on 0. Counted, not changed.\n- Soft accuracy = \u03a3 p\u00b7gold distribution; score MAE = |expected level \u2212 gold `score`|, as in Laya's eval.\n- Jev reported itself as jev-1.13.0 on every call (the published 0.727 is the same version, measured by the dataset card's author on 2026-09-18 and copied into Laya's table). Ours: 0.7360 (0.7375 with the notebook's noul \u2265 0.5 rule; 5 exact 0.5 noul answers). The +0.009 accuracy gap is within what an API model re-run on another day, possibly with the state sent as a string rather than an object, can move. The ECE gap is not: we get 0.044 against the published 0.144, with mean top probability 0.756 vs accuracy 0.736 (over-confidence +0.020; the card itself states +0.023, so the confidence level agrees). Neither the card nor Laya's table defines that ECE, so we cannot tell whether the gap is a different definition or a different run. We report 15-bin top-label ECE for every model: the definition in Laya's own script, under which we reproduce Laya's published 0.213 and 0.175.\n- `laya-typed-decisions` is *under*-confident here (mean top probability 0.553 vs accuracy 0.766); the fitted temperature is 0.21 (< 1 sharpens). Base `laya` is over-confident (0.536 vs 0.361; temperature 4.60)."
 }

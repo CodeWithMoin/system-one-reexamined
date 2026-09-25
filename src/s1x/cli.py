@@ -1,4 +1,4 @@
-"""s1x splits <task> | s1x run <method> <task> [--limit N] | s1x report [tasks...]"""
+"""s1x splits <task> | s1x run <method> <task> [--limit N] | s1x report [tasks...] | s1x td <method>|report"""
 from __future__ import annotations
 
 import argparse
@@ -146,6 +146,8 @@ def main() -> None:
     fp.add_argument("--max-steps", type=int, help="setfit: override the contrastive step cap (smoke tests)")
     fp.add_argument("--no-cache", action="store_true", help="train and score but do not write predictions")
     op = sub.add_parser("overflow"); op.add_argument("tasks", nargs="*", default=list(TASKS))
+    tp = sub.add_parser("td", help="Laya's own typed-decisions benchmark: run a method, or 'report'")
+    tp.add_argument("method")
     pp = sub.add_parser("report"); pp.add_argument("tasks", nargs="*", default=list(TASKS))
     a = ap.parse_args()
     if a.cmd == "splits":
@@ -164,6 +166,13 @@ def main() -> None:
     elif a.cmd == "order":
         from s1x import robustness
         robustness.run()
+    elif a.cmd == "td":
+        from s1x import typed_decisions
+        if a.method == "report":
+            res = typed_decisions.report()
+            print(res["markdown"])
+        else:
+            typed_decisions.run(a.method)
     elif a.cmd == "overflow":
         overflow(a.tasks)
     else:
