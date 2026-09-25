@@ -11,7 +11,7 @@ from s1x import cache, metrics
 from s1x.tasks import TASKS, build_splits, load_task
 
 RESULTS = Path(__file__).resolve().parents[2] / "results"
-ZERO_SHOT = ("majority", "laya", "laya-ml", "nli", "nli-base", "embed-zs", "embed-zs-base")
+ZERO_SHOT = ("majority", "laya", "laya-ml", "nli", "nli-base", "embed-zs", "embed-zs-base", "jev")
 
 
 def _runner(method: str, batch: int = 1):
@@ -24,6 +24,9 @@ def _runner(method: str, batch: int = 1):
     if method in ("embed-zs", "embed-zs-base"):
         from s1x.runners.embed_zs import EmbedZSRunner
         return EmbedZSRunner(method, batch_examples=batch)
+    if method == "jev":
+        from s1x.runners.jev import JevRunner
+        return JevRunner()
     if method == "laya-torch":
         from s1x.runners.laya_torch import LayaTorchRunner
         return LayaTorchRunner(batch_states=batch)

@@ -15,7 +15,7 @@ from s1x import cache, metrics
 from s1x.tasks import TASKS
 
 RESULTS = Path(__file__).resolve().parents[2] / "results"
-ZERO_SHOT = ("majority", "laya", "laya-ml", "nli", "nli-base", "embed-zs", "embed-zs-base")
+ZERO_SHOT = ("majority", "laya", "laya-ml", "nli", "nli-base", "embed-zs", "embed-zs-base", "jev")
 FEW_SHOT = ("embed-lr", "setfit", "ft-ce")
 PARITY_METHODS = ("setfit", "embed-lr")
 METRICS = ("accuracy", "macro_f1", "ece", "ece_ts", "brier", "sel_acc@50", "sel_acc@80", "sel_acc@95",
