@@ -15,7 +15,7 @@ from s1x import cache, metrics
 from s1x.tasks import TASKS
 
 RESULTS = Path(__file__).resolve().parents[2] / "results"
-ZERO_SHOT = ("majority", "laya", "laya-ml", "nli", "nli-base", "embed-zs", "embed-zs-base", "jev")
+ZERO_SHOT = ("majority", "laya", "laya-ml", "nli", "nli-base", "nli-c", "nli-base-c", "embed-zs", "embed-zs-base", "jev")
 FEW_SHOT = ("embed-lr", "setfit", "ft-ce")
 PARITY_METHODS = ("setfit", "embed-lr")
 METRICS = ("accuracy", "macro_f1", "ece", "ece_ts", "brier", "sel_acc@50", "sel_acc@80", "sel_acc@95",
@@ -282,6 +282,27 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
     if td.exists():
         out += ["## On Laya's own benchmark", "", json.loads(td.read_text()).get("markdown", ""), ""]
 
+    fp = RESULTS / "fresh_probe.json"
+    if fp.exists():
+        rows_fp = json.loads(fp.read_text())
+        out += ["## Contamination probe: fresh news published after 2026-09-16", "",
+                "161 BBC / Guardian / NPR articles published after Jev's launch, labelled into AG News's four topics "
+                "(feed section, then checked by hand: 32 ambiguous items dropped, 13 relabelled; `data/fresh/"
+                "ag_news_fresh_index.jsonl` lists URL, date and both labels — article text is not redistributed). "
+                "Same question and labels as AG News. A model that learned the task should do about as well on fresh "
+                "news; one that memorised AG News should fall relative to models that never saw it.", "",
+                "| Method | AG News test | Fresh | Fresh 95% CI | Change | Fresh, feed-section labels |",
+                "|---|---|---|---|---|---|"]
+        for r in rows_fp:
+            out.append(f"| {r['method']} | {r['ag_news_test']:.3f} | {r['fresh']:.3f} | "
+                       f"[{r['fresh_ci'][0]:.3f}, {r['fresh_ci'][1]:.3f}] | {r['fresh'] - r['ag_news_test']:+.3f} | "
+                       f"{r['fresh_section_labels']:.3f} |")
+        out += ["", "Reading: models that never saw AG News (clean NLI) gain 7–14 points, so the fresh set is easier "
+                "for them. Laya is the only model that falls (−4), consistent with its README listing AG News in its "
+                "training mix. Jev gains 4 — less than the clean models, closer to the classifier trained on AG News — "
+                "which fits some AG News exposure but also a ceiling effect (it starts at 0.878). With 161 examples "
+                "(±5 points) the Jev result is inconclusive.", ""]
+
     out += ["## Notes", "",
             "- Laya's `confidence` field is 1 − normalised entropy, not a probability of being right; every "
             "calibration number here uses Laya's per-option probabilities instead.",
@@ -291,6 +312,13 @@ def markdown(rows: list[dict], task_names: list[str]) -> str:
             "- embed-lr's high raw ECE is under-confidence: an L2-regularised logistic regression on unit-norm "
             "embeddings from a handful of examples gives flat probabilities; temperature scaling on calib fixes it.",
             "- nli-xsmall: skipped, no `deberta-v3-xsmall-zeroshot-v2.0` checkpoint exists on the Hub.",
+            "- Training-data contamination. The plain `deberta-v3-*-zeroshot-v2.0` NLI checkpoints (rows `nli`, `nli-base`) "
+            "were trained with up to 500 labelled examples per class from 28 datasets including ag_news, banking77, "
+            "sms_spam and an emotion set, plus rotten_tomatoes (the source of SST's sentences) — their own model card and "
+            "dataset list say so, and our scores match the card's with-training-data column. They are NOT zero-shot "
+            "here. The clean zero-shot NLI baseline is `nli-c` / `nli-base-c` (synthetic data + MNLI/FEVER only). Laya's "
+            "README lists AG News (and BoolQ) as \"in training mix\" and DAIR Emotion and SST-5 as held out; its "
+            "BENCHMARKS.md says spam and phishing were in the mix. Jev's training data is undisclosed.",
             "- Jev: TypeSafe API (`jev-latest`, reported `jev-1.13.0`), zero-shot, same instruction and label wording as "
             "Laya; its latency is an API round trip including the network (~830 ms p50 from India) and is never mixed "
             "into the local speed tables. Jev returns exact 0/1 probabilities on many items (62% of AG News "

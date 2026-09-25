@@ -4,3 +4,4 @@ __pycache__/
 .cache/
 .env*
 .DS_Store
+data/fresh/ag_news_fresh.jsonl

@@ -16,6 +16,7 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+import matplotlib.patches
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -27,6 +28,7 @@ BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"   # Laya, Jev, SetFit
 GREY, GREY_DARK = "#8a8a86", "#5c5c58"
 INK, INK_2, GRID, SURFACE = "#1f1f1d", "#5c5c58", "#e6e5e1", "#fcfcfb"
 MIN_BIN = 20
+LAYA_TRAINED = {"ag_news", "sms_spam"}  # per Laya's own README / BENCHMARKS.md
 TASKS = {"ag_news": "AG News (4 topics)", "emotion": "Emotion (6)", "banking77": "Banking77 (77 intents)",
          "sst5": "SST-5 (1–5 rating)", "sms_spam": "SMS spam (yes/no)"}
 
@@ -55,22 +57,22 @@ def fig_speed(latency_path: Path) -> Path:
     points = [  # (label, method key in latency, accuracy method, k, style)
         ("Laya (PyTorch)", "laya-torch", "laya", None, "laya"),
         ("Laya (MLX runtime)", "laya", "laya", None, "laya-mlx"),
-        ("NLI-large", "nli", "nli", None, "old"),
-        ("NLI-base", "nli-base", "nli-base", None, "old"),
+        ("NLI-large (clean)", "nli", "nli-c", None, "old"),
+        ("NLI-base (clean)", "nli-base", "nli-base-c", None, "old"),
         ("Bi-encoder ZS", "embed-zs", "embed-zs", None, "old"),
         ("SetFit, 16 labels", "setfit", "setfit", 16, "old"),
         ("Emb+LR, 16 labels", "embed-lr", "embed-lr", 16, "old"),
     ]
     # Hand-placed label offsets (points), so no two labels collide.
     offsets = {
-        "ag_news": {"Laya (PyTorch)": (8, 6), "Laya (MLX runtime)": (-8, 8, "right"), "NLI-large": (8, -12),
-                    "NLI-base": (-8, -14, "right"), "Bi-encoder ZS": (8, 4), "SetFit, 16 labels": (8, -12),
+        "ag_news": {"Laya (PyTorch)": (8, 6), "Laya (MLX runtime)": (-8, 8, "right"), "NLI-large (clean)": (8, -12),
+                    "NLI-base (clean)": (-8, -14, "right"), "Bi-encoder ZS": (8, 4), "SetFit, 16 labels": (8, -12),
                     "Emb+LR, 16 labels": (8, 6), "Jev": (-8, -14, "right")},
-        "banking77": {"Laya (PyTorch)": (8, -12), "Laya (MLX runtime)": (-8, 8, "right"), "NLI-large": (8, 4),
-                      "NLI-base": (-8, -14, "right"), "Bi-encoder ZS": (8, 4), "SetFit, 16 labels": (8, -12),
+        "banking77": {"Laya (PyTorch)": (8, -12), "Laya (MLX runtime)": (-8, 8, "right"), "NLI-large (clean)": (8, 4),
+                      "NLI-base (clean)": (-8, -14, "right"), "Bi-encoder ZS": (8, 4), "SetFit, 16 labels": (8, -12),
                       "Emb+LR, 16 labels": (8, 6), "Jev": (-8, 8, "right")},
     }
-    ylims = {"ag_news": (0.70, 0.95), "banking77": (0.30, 0.95)}
+    ylims = {"ag_news": (0.65, 0.95), "banking77": (0.30, 0.95)}
 
     def place(ax, task, label, key, x, y):
         o = offsets[task][key]
@@ -127,7 +129,7 @@ def fig_labels() -> Path:
             ax.annotate(label, (ks[-1], m[-1]), xytext=(5, dy), textcoords="offset points", va="center",
                         fontsize=8.5, color=INK_2)
         for method, color, ls, label in [("laya", BLUE, "-", "Laya"), ("jev", ORANGE, "-", "Jev"),
-                                         ("nli-base", GREY_DARK, (0, (4, 3)), "NLI-base")]:
+                                         ("nli-c", GREY_DARK, (0, (4, 3)), "Clean NLI")]:
             y = acc(task, method)
             ax.axhline(y, color=color, linestyle=ls, linewidth=1.6, zorder=2)
             below = (task, method) in {("emotion", "laya"), ("ag_news", "jev"), ("banking77", "jev")}
@@ -142,7 +144,7 @@ def fig_labels() -> Path:
     fig.suptitle("How many labels does it take to catch the zero-shot models?", x=0.01, ha="left",
                  fontsize=12.5, fontweight="bold", color=INK)
     fig.text(0.01, -0.04, "Lines: few-label methods, mean over 5 random draws (band = ±1 std). Horizontal lines: "
-             "zero-shot models, no labels. Laya blue, Jev orange, NLI-base dashed grey.", fontsize=8,
+             "zero-shot models, no labels. Laya blue, Jev orange, clean zero-shot NLI dashed grey.", fontsize=8,
              color=INK_2, ha="left")
     fig.tight_layout()
     out = ROOT / "figures" / "accuracy_vs_labels.png"
@@ -153,7 +155,7 @@ def fig_labels() -> Path:
 
 def fig_reliability() -> Path:
     fig, axes = plt.subplots(1, 3, figsize=(12, 4.2))
-    models = [("laya", BLUE, "Laya"), ("jev", ORANGE, "Jev"), ("nli-base", GREY_DARK, "NLI-base")]
+    models = [("laya", BLUE, "Laya"), ("jev", ORANGE, "Jev"), ("nli-c", GREY_DARK, "Clean NLI")]
     for ax, task in zip(axes, ["emotion", "sst5", "ag_news"]):
         ax.plot([0, 1], [0, 1], color=GRID, linewidth=1.5, zorder=1)
         for method, color, label in models:
@@ -184,7 +186,7 @@ def fig_hero() -> Path:
     methods = [  # (label, how to get accuracy, colour, marker, size)
         ("Laya (zero-shot)", lambda t: acc(t, "laya"), BLUE, "o", 110),
         ("Jev (zero-shot)", lambda t: acc(t, "jev"), ORANGE, "D", 80),
-        ("NLI-base, 2021 (zero-shot)", lambda t: acc(t, "nli-base"), GREY_DARK, "s", 70),
+        ("Clean NLI (true zero-shot)", lambda t: acc(t, "nli-c"), GREY_DARK, "s", 70),
         ("SetFit, 16 labels per class", lambda t: kshot(t, "setfit", 16)[0], AQUA, "^", 90),
     ]
     tasks = list(TASKS.items())[::-1]
@@ -209,7 +211,7 @@ def fig_hero() -> Path:
                for label, _, c, m, _ in methods]
     ax.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.45, 0.99), ncol=4, fontsize=9, handletextpad=0.3,
               columnspacing=1.4)
-    fig.suptitle("Each System One model wins one task. Older methods win the rest.", x=0.01, ha="left", y=0.99,
+    fig.suptitle("Jev beats older zero-shot methods everywhere. Laya’s wins are on its own training data.", x=0.01, ha="left", y=0.99,
                  fontsize=13.5, fontweight="bold", color=INK)
     fig.tight_layout()
     out = ROOT / "figures" / "hero.png"
@@ -222,7 +224,7 @@ def fig_hero_bars() -> Path:
     """Grouped bars, zero baseline: the same data as the hero dot plot, for comparison."""
     methods = [("Laya (zero-shot)", lambda t: acc(t, "laya"), BLUE),
                ("Jev (zero-shot)", lambda t: acc(t, "jev"), ORANGE),
-               ("NLI-base, 2021 (zero-shot)", lambda t: acc(t, "nli-base"), GREY_DARK),
+               ("Clean NLI (true zero-shot)", lambda t: acc(t, "nli-c"), GREY_DARK),
                ("SetFit, 16 labels per class", lambda t: kshot(t, "setfit", 16)[0], AQUA)]
     tasks = list(TASKS.items())
     fig, ax = plt.subplots(figsize=(11, 4.6))
@@ -230,7 +232,11 @@ def fig_hero_bars() -> Path:
     for j, (label, f, c) in enumerate(methods):
         xs = [i + (j - 1.5) * (width + gap) for i in range(len(tasks))]
         ys = [f(t) for t, _ in tasks]
-        ax.bar(xs, ys, width=width, color=c, label=label, zorder=3)
+        bars = ax.bar(xs, ys, width=width, color=c, label=label, zorder=3)
+        if c == BLUE:  # Laya's README: AG News in training mix; its benchmarks page: spam too
+            for b, (t, _) in zip(bars, tasks):
+                if t in LAYA_TRAINED:
+                    b.set_hatch("////"); b.set_edgecolor(SURFACE); b.set_linewidth(0)
         for x, y in zip(xs, ys):
             ax.annotate(f"{y:.2f}", (x, y), xytext=(0, 2), textcoords="offset points", ha="center", va="bottom",
                         fontsize=7.5, color=INK_2)
@@ -239,8 +245,14 @@ def fig_hero_bars() -> Path:
     ax.set_ylim(0, 1.08)
     ax.set_ylabel("Accuracy (1,000 test examples)")
     ax.grid(axis="x", visible=False)
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 0.99), ncol=4, fontsize=9)
-    fig.suptitle("Each System One model wins one task. Older methods win the rest.", x=0.01, ha="left", y=0.99,
+    handles, labels_ = ax.get_legend_handles_labels()
+    # The legend swatch copies the first bar, which is hatched (AG News); show Laya solid instead.
+    handles[0] = matplotlib.patches.Patch(facecolor=BLUE, label=labels_[0])
+    handles.append(matplotlib.patches.Patch(facecolor=BLUE, hatch="////", edgecolor=SURFACE,
+                                            label="Laya on its own training data"))
+    ax.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, 0.99), ncol=5, fontsize=8.5,
+              columnspacing=1.2, handletextpad=0.4)
+    fig.suptitle("Jev beats older zero-shot methods everywhere. Laya’s wins are on its own training data.", x=0.01, ha="left", y=0.99,
                  fontsize=13.5, fontweight="bold", color=INK)
     fig.tight_layout()
     out = ROOT / "figures" / "hero_bars.png"

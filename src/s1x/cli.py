@@ -11,14 +11,14 @@ from s1x import cache, metrics
 from s1x.tasks import TASKS, build_splits, load_task
 
 RESULTS = Path(__file__).resolve().parents[2] / "results"
-ZERO_SHOT = ("majority", "laya", "laya-ml", "nli", "nli-base", "embed-zs", "embed-zs-base", "jev")
+ZERO_SHOT = ("majority", "laya", "laya-ml", "nli", "nli-base", "nli-c", "nli-base-c", "embed-zs", "embed-zs-base", "jev")
 
 
 def _runner(method: str, batch: int = 1):
     if method in ("laya", "laya-ml"):
         from s1x.runners.laya import LayaRunner
         return LayaRunner(method, batch_states=batch)
-    if method in ("nli", "nli-base"):
+    if method in ("nli", "nli-base", "nli-c", "nli-base-c"):
         from s1x.runners.nli import MODELS, NLIRunner
         return NLIRunner(batch_examples=batch, model=MODELS[method])
     if method in ("embed-zs", "embed-zs-base"):

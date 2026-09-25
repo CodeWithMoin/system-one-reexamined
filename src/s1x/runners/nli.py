@@ -22,7 +22,13 @@ import numpy as np
 from s1x.tasks import Task
 
 MODEL = "MoritzLaurer/deberta-v3-large-zeroshot-v2.0"
-MODELS = {"nli": MODEL, "nli-base": "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"}  # no xsmall v2.0 exists
+# The plain v2.0 checkpoints were trained with up to 500 labelled examples per class from 28 classification
+# datasets, including AG News, DAIR Emotion, Banking77 and a spam set (see their model card). They are
+# therefore NOT zero-shot on those tasks. The "-c" checkpoints were trained only on synthetic data plus MNLI
+# and FEVER-NLI, so they are the clean zero-shot baseline.
+MODELS = {"nli": MODEL, "nli-base": "MoritzLaurer/deberta-v3-base-zeroshot-v2.0",
+          "nli-c": "MoritzLaurer/deberta-v3-large-zeroshot-v2.0-c",
+          "nli-base-c": "MoritzLaurer/deberta-v3-base-zeroshot-v2.0-c"}
 
 # One template per task, written once and never tuned on test.
 TEMPLATES = {
