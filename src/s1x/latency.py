@@ -15,9 +15,12 @@ are trained here on the k=8, seed=0 draw purely for timing and never written to 
 """
 from __future__ import annotations
 
-import gc
+import argparse
 import json
 import platform
+import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -66,63 +69,91 @@ def _bench_encoder(encode, head, texts, warm) -> dict:
     return {"single": single, "batched": batched}
 
 
-def run_task(task: str, with_pipeline: bool) -> dict:
+METHODS = ("laya", "laya-torch", "nli", "nli-base", "embed-zs", "embed-zs-base", "nli-pipeline", "embed-lr", "setfit")
+
+
+def bench_one(task: str, method: str, pred_dir: Path) -> dict:
+    """Time ONE method on ONE task. Meant to run in its own process (see `run`), so no model's
+    device memory — MPS or MLX — is still allocated when the next one is measured. Single-mode
+    probabilities are saved to pred_dir for the cross-method agreement checks."""
     data = load_task(task)
     texts = data.test.texts[:N]
     warm = data.calib.texts[:WARMUP]  # warm-up on calib, not on the measured examples
-    out: dict = {"task": task, "n": N, "warmup": WARMUP, "options": len(data.labels)}
+    out: dict = {}
 
-    def zero_shot(name, make, batch_attr, batch, ref=None):
-        runner = make()
-        out[f"{name}_single"], p1 = _bench(runner, data, texts, warm)
+    def zero_shot(runner, batch_attr, batch):
+        out[f"{method}_single"], p1 = _bench(runner, data, texts, warm)
         setattr(runner, batch_attr, batch)
-        out[f"{name}_batched"], p2 = _bench(runner, data, texts, warm)
-        out[f"{name}_batched"] |= {"batch": batch, "max_abs_diff_vs_single": float(np.abs(p1 - p2).max()),
-                                   "argmax_agree_vs_single": float((p1.argmax(1) == p2.argmax(1)).mean())}
-        if ref is not None:
-            out[f"{name}_single"]["argmax_agree_vs_laya_mlx"] = float((p1.argmax(1) == ref.argmax(1)).mean())
-        del runner
-        gc.collect()
-        return p1
+        out[f"{method}_batched"], p2 = _bench(runner, data, texts, warm)
+        out[f"{method}_batched"] |= {"batch": batch, "max_abs_diff_vs_single": float(np.abs(p1 - p2).max()),
+                                     "argmax_agree_vs_single": float((p1.argmax(1) == p2.argmax(1)).mean())}
+        np.save(pred_dir / f"{task}__{method}.npy", p1)
 
-    from s1x.runners.embed_zs import EmbedZSRunner
-    from s1x.runners.laya import LayaRunner
-    from s1x.runners.laya_torch import LayaTorchRunner
-    from s1x.runners.nli import MODELS, NLIPipelineRunner, NLIRunner
+    if method == "laya":
+        from s1x.runners.laya import LayaRunner
+        zero_shot(LayaRunner("laya"), "batch_states", LAYA_BATCH)
+    elif method == "laya-torch":
+        from s1x.runners.laya_torch import LayaTorchRunner
+        zero_shot(LayaTorchRunner(), "batch_states", LAYA_BATCH)
+    elif method in ("nli", "nli-base"):
+        from s1x.runners.nli import MODELS, NLIRunner
+        zero_shot(NLIRunner(model=MODELS[method]), "batch_examples", NLI_BATCH)
+    elif method in ("embed-zs", "embed-zs-base"):
+        from s1x.runners.embed_zs import EmbedZSRunner
+        zero_shot(EmbedZSRunner(method), "batch_examples", ENCODER_BATCH)
+    elif method == "nli-pipeline":
+        from s1x.runners.nli import NLIPipelineRunner
+        out["nli_pipeline_per_pair"], q = _bench(NLIPipelineRunner(), data, texts, warm)
+        np.save(pred_dir / f"{task}__nli-pipeline.npy", q)
+    elif method == "embed-lr":
+        from s1x.runners.fewshot import EmbedLR
+        emb = EmbedLR()
+        clf = _fit_embed_lr(emb, data)
+        r = _bench_encoder(emb.encode, clf.predict_proba, texts, warm)
+        out["embed-lr_single"], out["embed-lr_batched"] = r["single"], r["batched"]
+    elif method == "setfit":
+        model = _fit_setfit(data)
+        body, head = model.model_body, model.model_head
 
-    p_laya = zero_shot("laya", lambda: LayaRunner("laya"), "batch_states", LAYA_BATCH)
-    zero_shot("laya-torch", LayaTorchRunner, "batch_states", LAYA_BATCH, ref=p_laya)
-    q_single = zero_shot("nli", lambda: NLIRunner(model=MODELS["nli"]), "batch_examples", NLI_BATCH)
-    zero_shot("nli-base", lambda: NLIRunner(model=MODELS["nli-base"]), "batch_examples", NLI_BATCH)
-    zero_shot("embed-zs", lambda: EmbedZSRunner("embed-zs"), "batch_examples", ENCODER_BATCH)
-    zero_shot("embed-zs-base", lambda: EmbedZSRunner("embed-zs-base"), "batch_examples", ENCODER_BATCH)
-    if with_pipeline:
-        pipe = NLIPipelineRunner()
-        out["nli_pipeline_per_pair"], q_pipe = _bench(pipe, data, texts, warm)
-        out["nli_single"] |= {"max_abs_diff_vs_pipeline": float(np.abs(q_single - q_pipe).max()),
-                              "argmax_agree_vs_pipeline": float((q_single.argmax(1) == q_pipe.argmax(1)).mean())}
-        del pipe
-        gc.collect()
+        def encode(ts):
+            return body.encode(ts, batch_size=ENCODER_BATCH, normalize_embeddings=model.normalize_embeddings,
+                               convert_to_numpy=True, show_progress_bar=False)
 
-    from s1x.runners.fewshot import EmbedLR
-    emb = EmbedLR()
-    clf = _fit_embed_lr(emb, data)
-    r = _bench_encoder(emb.encode, clf.predict_proba, texts, warm)
-    out["embed-lr_single"], out["embed-lr_batched"] = r["single"], r["batched"]
-    del emb
-    gc.collect()
+        r = _bench_encoder(encode, head.predict_proba, texts, warm)
+        out["setfit_single"], out["setfit_batched"] = r["single"], r["batched"]
+    else:
+        raise SystemExit(f"unknown method {method}")
+    return out
 
-    model = _fit_setfit(data)
-    body, head = model.model_body, model.model_head
 
-    def encode(ts):
-        return body.encode(ts, batch_size=ENCODER_BATCH, normalize_embeddings=model.normalize_embeddings,
-                           convert_to_numpy=True, show_progress_bar=False)
+def run_task(task: str, with_pipeline: bool, pred_dir: Path) -> dict:
+    """Every method on one task, each in a fresh child process.
 
-    r = _bench_encoder(encode, head.predict_proba, texts, warm)
-    out["setfit_single"], out["setfit_batched"] = r["single"], r["batched"]
-    del model
-    gc.collect()
+    Running all nine models in one process leaked device memory (MPS/MLX allocations are not freed
+    by `del` + gc.collect()): on a 24 GB M4 Pro the process reached a 26 GB footprint and ~11 GB of
+    swap, so later methods were timed under swap. A fresh process per method returns everything to
+    the OS between measurements and starts each timing from the same clean state."""
+    out: dict = {"task": task, "n": N, "warmup": WARMUP, "options": len(load_task(task).labels),
+                 "isolation": "one process per method"}
+    for method in METHODS:
+        if method == "nli-pipeline" and not with_pipeline:
+            continue
+        result_file = pred_dir / f"{task}__{method}.json"
+        subprocess.run([sys.executable, "-m", "s1x.latency", "--one", task, method, "--pred-dir", str(pred_dir),
+                        "--result", str(result_file)], check=True)
+        out |= json.loads(result_file.read_text())
+        print(f"  {task} {method}: done", flush=True)
+    # Cross-method agreement, from the saved single-mode predictions.
+    def load(m):
+        f = pred_dir / f"{task}__{m}.npy"
+        return np.load(f) if f.exists() else None
+    laya, laya_t = load("laya"), load("laya-torch")
+    if laya is not None and laya_t is not None:
+        out["laya-torch_single"]["argmax_agree_vs_laya_mlx"] = float((laya.argmax(1) == laya_t.argmax(1)).mean())
+    nli, pipe = load("nli"), load("nli-pipeline")
+    if nli is not None and pipe is not None:
+        out["nli_single"] |= {"max_abs_diff_vs_pipeline": float(np.abs(nli - pipe).max()),
+                              "argmax_agree_vs_pipeline": float((nli.argmax(1) == pipe.argmax(1)).mean())}
     return out
 
 
@@ -154,16 +185,31 @@ def _fit_setfit(data):
 
 
 def run(tasks=("ag_news", "banking77")) -> dict:
-    return {"machine": f"{platform.machine()} {platform.platform()}",
-            "note": "per-example latency in batched mode = batch wall time / batch size; few-shot = inference only",
-            **{task: run_task(task, with_pipeline=(task == "ag_news")) for task in tasks}}
+    with tempfile.TemporaryDirectory() as tmp:
+        return {"machine": f"{platform.machine()} {platform.platform()}",
+                "note": "per-example latency in batched mode = batch wall time / batch size; few-shot = inference only",
+                **{task: run_task(task, with_pipeline=(task == "ag_news"), pred_dir=Path(tmp)) for task in tasks}}
 
 
-def write(result: dict) -> Path:
-    path = RESULTS / "latency.json"
+def write(result: dict, path: Path | None = None) -> Path:
+    path = path or RESULTS / "latency.json"
     existing = json.loads(path.read_text()) if path.exists() else {}
     if "benchmark" in existing:  # first run (AG News, Laya + NLI only), kept for the record
         existing["benchmark_v1_ag_news"] = existing.pop("benchmark")
     existing |= {"benchmark_v2": result}
     path.write_text(json.dumps(existing, indent=1))
     return path
+
+
+if __name__ == "__main__":
+    # `python -m s1x.latency` runs the whole benchmark; `--one task method` is the per-process worker.
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--one", nargs=2, metavar=("TASK", "METHOD"))
+    ap.add_argument("--pred-dir")
+    ap.add_argument("--result")
+    ap.add_argument("--out", help="where to write the full result (default results/latency.json)")
+    a = ap.parse_args()
+    if a.one:
+        Path(a.result).write_text(json.dumps(bench_one(a.one[0], a.one[1], Path(a.pred_dir))))
+    else:
+        print(f"wrote {write(run(), Path(a.out) if a.out else None)}")
